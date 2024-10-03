@@ -55,7 +55,7 @@ This script takes errorful sentences + token-level labels and parses them into a
 * --vocab-file is the path to the vocab file containing all words in your model's vocabulary
 * --token defines the indexing type for *MOVE* (discussed [below](#definitions))
   * move-absolute means the *MOVE* label will be included and it will use *absolute* indices to determine the final position of the token. This final position is calculated **final**, after all other labels are applied.
- * move-relative means the *MOVE* label will be included and it will use *relative* indices to determine the final position of the token. The final is position is calculated **final** and **left-to-right**.
+  * move-relative means the *MOVE* label will be included and it will use *relative* indices to determine the final position of the token. The final is position is calculated **final** and **left-to-right**.
 
 ### label.py
 
