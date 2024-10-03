@@ -68,7 +68,7 @@ python3 label.py INPUT_FILE [OUTPUT_FILE] [-d/--dictionary-file] [dictionary fil
 This script takes errorful sentences + target sentences and translates them into token-level edits using shortest edit distance.
 
 * input file is a path to a file with an errorful sentence on one line, the target sentence on the next, and a blank line before the next sentence
-* output file is optional, defines the output path to place the parsed sentences in. If no output path is supplied, it is placed in the same directory as the input file w/ the name [input file name]_labeled.txt.
+* output file is optional, defines the output path to place the labeled sentences in. If no output path is supplied, it is placed in the same directory as the input file w/ the name [input file name]_labeled.txt.
 * --dictionary-file is the path to the dictionary file which supplies different morphological forms for a word
 * --vocab-file is the path to the vocab file containing all words in your model's vocabulary
 * --token means the output synthetic data will include token-level labels for the errorful sentence (discussed [below](#definitions)) for use in a token-level GEC system (as with GECToR)
