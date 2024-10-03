@@ -24,7 +24,7 @@ Generally to be used to augment smaller high-quality training sets as in *GECToR
 The main script is generate.py. This script can be ran as:
 
 ```
-python generate.py [input file] [output file] [-n/--num-sentences] [number to generate for each origin] [-s/--seq2seq]  [-t/--token] [move-absolute, move-relative, replace]
+python generate.py INPUT_FILE [OUTPUT_FILE] [-n/--num-sentences] [number to generate for each origin] [-s/--seq2seq]  [-t/--token] [move-absolute, move-relative, replace]
 ```
 
 This script generates synthetic errorful sentences from well-formed Spanish sentences in a corpus.
@@ -44,7 +44,7 @@ This script generates synthetic errorful sentences from well-formed Spanish sent
 Ran as:
 
 ```
-python3 parse.py [input file] [output file] [-d/--dictionary-file] [dictionary file] [-v/--vocab-file] [vocab file] [-t/--token] [move-absolute, move-relative]
+python3 parse.py INPUT_FILE [OUTPUT_FILE] [-d/--dictionary-file] [dictionary file] [-v/--vocab-file] [vocab file] [-t/--token] [move-absolute, move-relative]
 ```
 
 This script takes errorful sentences + token-level labels and parses them into a corrected sentence.
@@ -62,7 +62,7 @@ This script takes errorful sentences + token-level labels and parses them into a
 Ran as:
 
 ```
-python3 label.py [input file] [output file] [-d/--dictionary-file] [dictionary file] [-v/--vocab-file] [vocab file] [-t/--token] [move-absolute, move-relative, replace]
+python3 label.py INPUT_FILE [OUTPUT_FILE] [-d/--dictionary-file] [dictionary file] [-v/--vocab-file] [vocab file] [-t/--token] [move-absolute, move-relative, replace]
 ```
 
 This script takes errorful sentences + target sentences and translates them into token-level edits using shortest edit distance.
