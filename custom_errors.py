@@ -7,3 +7,7 @@ Purpose: Defines custom errors for SYNTH GEC ES project
 class InvalidLabelException(Exception):
     def __init__(self, message):
         super(message)
+
+class NotInDictionaryException(Exception):
+    def __init__(self, message):
+        super(message)
