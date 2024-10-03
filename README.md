@@ -12,7 +12,7 @@ Generally to be used to augment smaller high-quality training sets as in *GECToR
 * [Running the script](#running-the-script)
 * [Definitions](#definitions)
 * [Mutation Types](#mutation-types)
-* [Token-Level Stacking](token-level-stacking)
+* [Token-Level Stacking](#token-level-stacking)
 
 ## Running the script
 
