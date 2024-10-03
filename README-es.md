@@ -24,7 +24,7 @@ Generalmente se usa para amplificar conjuntos de datos más pequeños de alta ca
 El script principal es generate.py. Se ejecuta como:
 
 ```
-python generate.py [input file] [output file] [-n/--num-sentences] [number to generate for each origin] [-s/--seq2seq]  [-t/--token] [move-absolute, move-relative, replace]
+python generate.py INPUT_FILE [OUTPUT_FILE] [-n/--num-sentences] [number to generate for each origin] [-s/--seq2seq]  [-t/--token] [move-absolute, move-relative, replace]
 ```
 
 Este script se usa para generar frases con errores de un archivo de corpus con frases sin errores.
@@ -44,7 +44,7 @@ Este script se usa para generar frases con errores de un archivo de corpus con f
 Se ejecuta como:
 
 ```
-python3 parse.py [input file] [output file] [-d/--dictionary-file] [dictionary file] [-v/--vocab-file] [vocab file] [-t/--token] [move-absolute, move-relative]
+python3 parse.py INPUT_FILE [OUTPUT_FILE] [-d/--dictionary-file] [dictionary file] [-v/--vocab-file] [vocab file] [-t/--token] [move-absolute, move-relative]
 ```
 
 Este script se usa un archivo con frases con errores + etiquetas de token para convertirlas a frases corregidas.
@@ -62,7 +62,7 @@ Este script se usa un archivo con frases con errores + etiquetas de token para c
 Se ejecuta como:
 
 ```
-python3 label.py [input file] [output file] [-d/--dictionary-file] [dictionary file] [-v/--vocab-file] [vocab file] [-t/--token] [move-absolute, move-relative, replace]
+python3 label.py INPUT_FILE [OUTPUT_FILE] [-d/--dictionary-file] [dictionary file] [-v/--vocab-file] [vocab file] [-t/--token] [move-absolute, move-relative, replace]
 ```
 
 Este script se usa frases con errores + frases sin errores y crea etiquetas de token para ellas.
