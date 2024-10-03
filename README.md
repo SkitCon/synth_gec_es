@@ -1,6 +1,6 @@
 # synth_gec_es
-
-**[En español](README-es.md)**
+[![en](https://img.shields.io/badge/lang-en-red.svg)](README.md)
+[![es](https://img.shields.io/badge/lang-es-yellow.svg)](README-es.md)
 
 SYNthetic Grammatical Error Correction for Spanish (ES) is a system for generating synthetic GEC data for common Spanish grammatical errors to train a GEC model.
 
