@@ -9,12 +9,17 @@ Generally to be used to augment smaller high-quality training sets as in *GECToR
 **WORK IN PROGRESS**
 
 ## Table of Contents
-* [Running the script](#running-the-script)
+* [Scripts](#scripts)
+  * [generate.py](#generate.py)
+  * [parse.py](#parse.py)
+  * [label.py](#label.py)
 * [Definitions](#definitions)
 * [Mutation Types](#mutation-types)
 * [Token-Level Stacking](#token-level-stacking)
 
-## Running the script
+## Scripts
+
+### generate.py
 
 The main script is generate.py. This script can be ran as:
 
@@ -22,10 +27,50 @@ The main script is generate.py. This script can be ran as:
 python generate.py [input file] [output file] [-n/--num-sentences] [number to generate for each origin] [-s/--seq2seq]  [-t/--token] [move-absolute, move-relative, replace]
 ```
 
+This script generates synthetic errorful sentences from well-formed Spanish sentences in a corpus.
+
 * input file is a path to a file with sentences in Spanish on each line. Note that this script assumes unlabeled data and that each line contains only one sentence.
 * output file is optional, defines the output path to place the generated data in. If no output path is supplied, it is placed in the same directory as the input file w/ the name [input file name]_synth.txt.
 * --num-sentences is the number of errorful sentences that will be generated from each correct sentence in the supplied corpus. By default 1, but you can set it higher to generate more errorful sentences from one sentence with difference errors.
 * --seq2seq means the output synthetic data will include the raw errorful sentence unlabeled for use in a traditional NMT-based seq2seq GEC system (as with BART or T5)
+* --token means the output synthetic data will include token-level labels for the errorful sentence (discussed [below](#definitions)) for use in a token-level GEC system (as with GECToR)
+  * --token requires at least one associated argument, either move-absolute, move-relative, or replace (if multiple, multiple token-level labels will be supplied using each system
+    * move-absolute means the *MOVE* label will be included and it will use *absolute* indices to determine the final position of the token. This final position is calculated **final**, after all other labels are applied.
+    * move-relative means the *MOVE* label will be included and it will use *relative* indices to determine the final position of the token. The final is position is calculated **final** and **left-to-right**.
+    * replace means the *REPLACE* label will be included instead of *move*
+
+### parse.py
+
+Ran as:
+
+```
+python3 parse.py [input file] [output file] [-d/--dictionary-file] [dictionary file] [-v/--vocab-file] [vocab file] [-t/--token] [move-absolute, move-relative]
+```
+
+This script takes errorful sentences + token-level labels and parses them into a corrected sentence.
+
+* input file is a path to a file with a sentence on one line, the respective token-level labels on the next line, and a blank line before the next sentence
+* output file is optional, defines the output path to place the parsed sentences in. If no output path is supplied, it is placed in the same directory as the input file w/ the name [input file name]_parsed.txt.
+* --dictionary-file is the path to the dictionary file which supplies different morphological forms for a word
+* --vocab-file is the path to the vocab file containing all words in your model's vocabulary
+* --token defines the indexing type for *MOVE* (discussed [below](#definitions))
+  * move-absolute means the *MOVE* label will be included and it will use *absolute* indices to determine the final position of the token. This final position is calculated **final**, after all other labels are applied.
+ * move-relative means the *MOVE* label will be included and it will use *relative* indices to determine the final position of the token. The final is position is calculated **final** and **left-to-right**.
+
+### label.py
+
+Ran as:
+
+```
+python3 label.py [input file] [output file] [-d/--dictionary-file] [dictionary file] [-v/--vocab-file] [vocab file] [-t/--token] [move-absolute, move-relative, replace]
+```
+
+This script takes errorful sentences + target sentences and translates them into token-level edits using shortest edit distance.
+
+* input file is a path to a file with an errorful sentence on one line, the target sentence on the next, and a blank line before the next sentence
+* output file is optional, defines the output path to place the parsed sentences in. If no output path is supplied, it is placed in the same directory as the input file w/ the name [input file name]_labeled.txt.
+* --dictionary-file is the path to the dictionary file which supplies different morphological forms for a word
+* --vocab-file is the path to the vocab file containing all words in your model's vocabulary
 * --token means the output synthetic data will include token-level labels for the errorful sentence (discussed [below](#definitions)) for use in a token-level GEC system (as with GECToR)
   * --token requires at least one associated argument, either move-absolute, move-relative, or replace (if multiple, multiple token-level labels will be supplied using each system
     * move-absolute means the *MOVE* label will be included and it will use *absolute* indices to determine the final position of the token. This final position is calculated **final**, after all other labels are applied.
