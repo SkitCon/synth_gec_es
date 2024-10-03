@@ -12,7 +12,7 @@ Generalmente se usa para amplificar conjuntos de datos más pequeños de alta ca
 * [Ejectuar el script](#ejecutar-el-script)
 * [Definiciones](#definiciones)
 * [Tipos de Mutación](#tipos-de-mutación)
-* [Etiquetas Múltiples](#etiqueta-multiples)
+* [Etiquetas Múltiples](#etiquetas-multiples)
 
 ## Ejecutar el script
 
