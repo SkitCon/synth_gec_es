@@ -9,18 +9,25 @@ Generalmente se usa para amplificar conjuntos de datos más pequeños de alta ca
 **TRABAJO EN PROCESO**
 
 ## Índice de Materias
-* [Ejectuar el script](#ejecutar-el-script)
+* [Scripts](#scripts)
+  * [generate.py](#generate.py)
+  * [parse.py](#parse.py)
+  * [label.py](#label.py)
 * [Definiciones](#definiciones)
 * [Tipos de Mutación](#tipos-de-mutación)
 * [Etiquetas Múltiples](#etiquetas-múltiples)
 
-## Ejecutar el script
+## Scripts
+
+### generate.py
 
 El script principal es generate.py. Se ejecuta como:
 
 ```
 python generate.py [input file] [output file] [-n/--num-sentences] [number to generate for each origin] [-s/--seq2seq]  [-t/--token] [move-absolute, move-relative, replace]
 ```
+
+Este script se usa para generar frases con errores de un archivo de corpus con frases sin errores.
 
 * input file es una ruta de entrada a un archivo .txt con una frase por cada línea. Tenga en cuenta que este script espera datos sin etiqueta.
 * output file es opcional, define la ruta de salida para guardar los datos sintéticos. Por omisión, la ruta de salida es [input file name]_synth.txt.
@@ -31,6 +38,42 @@ python generate.py [input file] [output file] [-n/--num-sentences] [number to ge
     * move-absolute signfica que la etiqueta *MOVE* se incluirá and usará índices *absolutos* para calcular la posición final del token. Esta posición final se calcula **finalmente**.
     * move-relative significa que la etiqueta *MOVE* se incluirá and usará índices *relativos* para calcular la posición final del token. La posición final se calcula **finalmente** y de **izquierda a derecha**.
     * replace significa que la etiqueta *REPLACE* se incluirá en vez de *move*
+   
+### parse.py
+
+Se ejecuta como:
+
+```
+python3 parse.py [input file] [output file] [-d/--dictionary-file] [dictionary file] [-v/--vocab-file] [vocab file] [-t/--token] [move-absolute, move-relative]
+```
+
+Este script se usa un archivo con frases con errores + etiquetas de token para convertirlas a frases corregidas.
+
+* input file es una ruta a un archivo txt con una frase con errores en una línea, las etiquetas de token en la línea siguiente, y una línea en blanco entre esta frase y la siguiente
+* output file es opcional, defines la ruta de salida para guardar las frases corregidas. Por omisión es [input file name]_parsed.txt.
+* --dictionary-file es la ruta al archivo del diccionario que define las formas morfologías para una palabra
+* --vocab-file es la ruta al archivo de vocabulario que contiene todas las palabras en el vocabulario de tu modelo
+* --token define el tipo de índice para *MOVE* (lea más [abajo](#definiciones))
+  * move-absolute signfica que la etiqueta *MOVE* se incluirá and usará índices *absolutos* para calcular la posición final del token. Esta posición final se calcula **finalmente**.
+  * move-relative significa que la etiqueta *MOVE* se incluirá and usará índices *relativos* para calcular la posición final del token. La posición final se calcula **finalmente** y de **izquierda a derecha**
+
+### label.py
+
+Se ejecuta como:
+
+```
+python3 label.py [input file] [output file] [-d/--dictionary-file] [dictionary file] [-v/--vocab-file] [vocab file] [-t/--token] [move-absolute, move-relative, replace]
+```
+
+Este script se usa frases con errores + frases sin errores y crea etiquetas de token para ellas.
+
+* input file es una ruta a un archivo txt con una frase con errores en una línea, la frase sin errores en la siguiente, y una línea en blanco entre esta frase y la siguiente
+* output file es opcional, defines la ruta de salida para guardar las etiquetas de token. Por omisión es [input file name]_labeled.txt.
+* --dictionary-file es la ruta al archivo del diccionario que define las formas morfologías para una palabra
+* --vocab-file es la ruta al archivo de vocabulario que contiene todas las palabras en el vocabulario de tu modelo
+* --token define el tipo de índice para *MOVE* (lea más [abajo](#definiciones))
+  * move-absolute signfica que la etiqueta *MOVE* se incluirá and usará índices *absolutos* para calcular la posición final del token. Esta posición final se calcula **finalmente**.
+  * move-relative significa que la etiqueta *MOVE* se incluirá and usará índices *relativos* para calcular la posición final del token. La posición final se calcula **finalmente** y de **izquierda a derecha**
 
 ## Definiciones
 
