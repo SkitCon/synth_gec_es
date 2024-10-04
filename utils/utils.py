@@ -108,7 +108,7 @@ def mutate(word, label_param, lemma_to_lex, lemmatizer):
             else:
                 return word[0].lower() + word[1:]
     
-    if isinstance(list, word):
+    if isinstance(word, list):
         rest = word[1:]
         word = word[0]
     else:
@@ -208,9 +208,37 @@ def apply_labels(sentence, labels, lemma_to_lex, lemmatizer, vocab, move_type="a
     :return corrected sentence (str): the corrected sentence
     '''
     sentence = sentence.copy()
+    copies = []
+    deletes = []
     for i, label in enumerate(labels):
+        cur_copies = []
+        delete = False
         for sub_label in BeautifulSoup(label).find_all(True):
             name = sub_label.name
-            type = sub_label.get("type", "")
-            sentence[i] = apply_label(sentence[i], name, type, lemma_to_lex, lemmatizer, vocab)
+            param = sub_label.get("param", "")
+            if name != "DELETE" and name.split('-')[1] != "COPY":
+                sentence[i] = apply_label(sentence[i], name, param, lemma_to_lex, lemmatizer, vocab)
+            elif name != "DELETE": # Save copies for next step to allow edits
+                cur_copies.append(sub_label)
+            else: # Save deletes for last to allow copies
+                delete = True
+        copies.append(cur_copies)
+        deletes.append(delete)
+    
+    # Run copies
+    for i, token_copies in enumerate(copies):
+        for copy in token_copies:
+            name = copy.name
+            param = int(copy.get("param", -1))
+            cur_token = [sentence[i]] if isinstance(sentence[i], str) else sentence[i]
+            if name.split('-')[0] == "PRE":
+                sentence[i] = sentence[param] + cur_token
+            else:
+                sentence[i] = cur_token + sentence[param]
+
+    # Run deletes
+    for i, delete in enumerate(deletes):
+        if delete:
+            sentence[i] = ""
+
     return sentence
