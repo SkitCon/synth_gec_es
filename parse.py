@@ -7,7 +7,7 @@ Purpose: This script takes errorful sentences + token-level labels and parses th
 import argparse
 from pathlib import Path
 
-def correct_errorful_sentences(input_file, output_file, dict_file, vocab_file, token_type=None):
+def correct_errorful_sentences(input_file, output_file, dict_file, vocab_file):
     '''
     Stub
     '''
@@ -19,9 +19,6 @@ if __name__ == "__main__":
     parser.add_argument("output_file", help="optional, defines the output path to place the parsed sentences in")
     parser.add_argument("-d", "--dict-file", help="path to the dictionary file which supplies different morphological forms for a word")
     parser.add_argument("-v", "--vocab-file", help="path to the vocab file containing all words in your model's vocabulary")
-    parser.add_argument("--token",
-                        help="defines the indexing type for MOVE",
-                        nargs=1)
 
     args = parser.parse_args()
 
@@ -32,4 +29,4 @@ if __name__ == "__main__":
     else:
         output_file = args.output_file
 
-    correct_errorful_sentences(input_file, output_file, args.dict_file, args.vocab_file, args.token)
+    correct_errorful_sentences(input_file, output_file, args.dict_file, args.vocab_file)

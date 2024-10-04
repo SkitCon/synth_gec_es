@@ -7,7 +7,7 @@ Purpose: This script generates synthetic errorful sentences from well-formed Spa
 import argparse
 from pathlib import Path
 
-def generate_errorful_sentences(input_file, output_file, num_sentences, seq2seq=False, token_types=[]):
+def generate_errorful_sentences(input_file, output_file, num_sentences, seq2seq=False, token_types=True):
     '''
     Stub
     '''
@@ -22,8 +22,8 @@ if __name__ == "__main__":
                         help="the output synthetic data will include the raw errorful sentence unlabeled for use in a traditional NMT-based seq2seq GEC system (as with BART or T5)",
                         action="store_true")
     parser.add_argument("-t", "--token",
-                        help="followed by the move/replace types to be used for token-level labels",
-                        nargs="*")
+                        help="the output synthetic data will include token-level labels",
+                        action="store_true")
 
     args = parser.parse_args()
 
@@ -39,4 +39,4 @@ if __name__ == "__main__":
     else:
         num_sentences = args.num_sentences
 
-    generate_errorful_sentences(input_file, output_file, num_sentences, args.seq2seq, args.token if args.token else [])
+    generate_errorful_sentences(input_file, output_file, num_sentences, args.seq2seq, args.token)

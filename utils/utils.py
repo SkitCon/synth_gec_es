@@ -168,15 +168,17 @@ def apply_label(word, label, label_param, lemma_to_lex, lemmatizer, vocab):
 
     :return corrected_word (str): the corrected word based on label
     '''
-    if label not in ["KEEP", "PRE-ADD", "POST-ADD", "MUTATE", "REPLACE"]:
+    if label not in ["KEEP", "DELETE", "PRE-ADD", "POST-ADD", "MUTATE", "REPLACE"]:
         raise InvalidLabelException()
     
     if label == "KEEP":
         return word
+    elif label == "DELETE":
+        return ""
     elif label == "PRE-ADD":
-        return vocab[label_param] + word
+        return [vocab[label_param]] + [word]
     elif label == "POST-ADD":
-        return word + vocab[label_param]
+        return [word] + [vocab[label_param]]
     elif label == "MUTATE":
         return mutate(word, label_param, lemma_to_lex, lemmatizer)
     elif label == "REPLACE":
@@ -206,33 +208,9 @@ def apply_labels(sentence, labels, lemma_to_lex, lemmatizer, vocab, move_type="a
     :return corrected sentence (str): the corrected sentence
     '''
     sentence = sentence.copy()
-    move_labels = []
     for i, label in enumerate(labels):
-        sub_labels_queue = deque(BeautifulSoup(label).find_all(True))
-        for i in range(len(sub_labels_queue)):
-            sub_label = sub_labels_queue.popleft()
+        for sub_label in BeautifulSoup(label).find_all(True):
             name = sub_label.name
             type = sub_label.get("type", "")
-            if name == "MOVE":
-                sub_labels_queue.append(sub_label)
-            else:
-                sentence[i] = apply_label(sentence[i], name, type, lemma_to_lex, lemmatizer, vocab)
-        move_labels.append(list(sub_labels_queue))
-    movements = [0] * len(sentence)
-    original_pos = list(range(len(sentence)))
-    for i, moves in move_labels:
-        for move in moves:
-            word = sentence[i + movements[i]]
-            cur_pos = i + movements[i]
-            if move_type == "absolute":
-                new_pos = int(move.get("type", ""))
-            else:
-                new_pos = cur_pos + int(move.get("type", ""))
-            word_original_pos = original_pos[i]
-            for j in range(cur_pos+1, new_pos+1):
-                movements[original_pos[j]] -= 1
-                sentence[j-1] = sentence[j]
-                original_pos[j-1] = original_pos[j]
-            sentence[new_pos] = word
-            original_pos[new_pos] = word_original_pos
+            sentence[i] = apply_label(sentence[i], name, type, lemma_to_lex, lemmatizer, vocab)
     return sentence
