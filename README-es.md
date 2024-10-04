@@ -81,7 +81,48 @@ Las etiquetas de token principales son:
 * `<REPLACE token=i/>`
   * Reemplazar este token con el token *i* (por índice de token en vocab.txt)
  
- 
+### Por qué hay ambos PRE-ADD y POST-ADD?
+PRE-ADD y POST-ADD son redundantes. En realidad, todas las transformaciones son posibles con una de estas etiquetas. Sin embargo, creo que tener ambos puede introducir más flexibilidad en la corrección de errores. Mi hipótesis es que permitir una transformación de ambos tipos entrenará una comprensión bidireccional en el model de cómo construir frases naturalmente.
+
+Por ejemplo, tenemos la frase con errores:
+
+  (1) *Él es trabajador muy.
+
+La manera más natural de corregir este error es:
+
+```
+<KEEP/> <KEEP/> <PRE-ADD token=muy/> <DELETE/> <KEEP/>
+```
+
+que representa la frasa correcta:
+
+  (2) Él es muy trabajador.
+
+Es porque *muy* es en la misma agrupación jerárquica como *trabajador*. *muy* modifica *trabajador*.
+
+Si solamente tuviéramos POST-ADD (i.e. APPEND), la corrección sería:
+
+```
+<KEEP/> <POST-ADD token=muy/> <KEEP/> <DELETE/> <KEEP/>
+```
+
+Mientras que funciona bien, no hay una conexión semántica entre *es* y *muy*.
+
+En un árbol de sintaxis simplificado, facilmente vimos la conexión:
+
+```
+     S
+   /   \
+  N     VP
+  |    /  \
+  Él  V    NP
+      |   /  \
+     es ADV  ADJ
+         |    |
+        muy  trabajador
+```
+
+*muy* y *trabajador* son hermanas, pero *es* y *muy* son primos. Estas dependencias aplican bidireccionalmente porque el lenguaje humano es jerárquico, no secuencial.
 
 ## Tipos de Mutación
 * CAPITALIZE (ESCRIBIR CON MAYÚSCULAS)
@@ -123,13 +164,13 @@ Es posible que hayas dado cuenta de que estas etiqueta no son mutuamente excluye
 
 ```
 espero que corre tú bien.
-<MUTATE type=CAPITALIZE-TRUE/>  <KEEP/>  <MOVE i=1/><MUTATE type=PERSON-2/><MUTATE type=MOOD-SUBJ/>  <KEEP/>  <KEEP/>  <KEEP/>
+<MUTATE param=CAPITALIZE-TRUE/>  <KEEP/>  <MUTATE param=PERSON-2/><MUTATE param=MOOD-SUBJ/><PRE-ADD param=tú/>  <DELETE/>  <KEEP/>  <KEEP/>
 ```
 
 convierte la frasa al:
 
 `Espero que tú corras bien.`
 
-Por lo tanto, es clasificación multietiqueta para cada token. La salida esperada para cada token es un vector de integer con la longitud de etiquetas posibles (30). Cada dimensión es binaria **excepto** que las que representan el MOVE (value = índice), PRE-ADD/POST-ADD (value = índice del token), y REPLACE (value = índice del token).
+Por lo tanto, es clasificación multietiqueta para cada token. La salida esperada para cada token es un vector de integer con la longitud de etiquetas posibles (30). Cada dimensión es binaria **excepto** que las que representan PRE-ADD/POST-ADD (value = índice del token) y REPLACE (value = índice del token).
 
 Tenga en cuente que este proyecto es un trabajo en proceso, así que me alegraría mucho recibir comentarios para ajustar las definiciones del proyecto. Es mi primera iteración y ya no tengo evaluaciónes de rendimimento con este diseño del sistema.
