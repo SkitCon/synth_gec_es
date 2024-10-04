@@ -80,6 +80,8 @@ Este script se usa frases con errores + frases sin errores y crea etiquetas de t
 Las etiquetas de token principales son:
 * `<KEEP/>`
   * No cambiar el token
+* `<DELETE/>`
+  * Borrar el token
 * `<PRE-ADD token=i/>`
   * Añadir el token *i* (por índice de token en vocab.txt) justo antes de este token
 * `<POST-ADD token=i/>`
@@ -139,6 +141,6 @@ convierte la frasa al:
 
 `Espero que tú corras bien.`
 
-Por lo tanto, es clasificación multietiqueta para cada token. La salida esperada para cada token es un vector de integer con la longitud de etiquetas posibles (30). Cada dimensión es binaria **except** que lo para el MOVE (value = índice), PRE-ADD/POST-ADD (value = índice del token), and REPLACE (value = índice del token).
+Por lo tanto, es clasificación multietiqueta para cada token. La salida esperada para cada token es un vector de integer con la longitud de etiquetas posibles (30). Cada dimensión es binaria **excepto** que las que representan el MOVE (value = índice), PRE-ADD/POST-ADD (value = índice del token), y REPLACE (value = índice del token).
 
 Tenga en cuente que este proyecto es un trabajo en proceso, así que me alegraría mucho recibir comentarios para ajustar las definiciones del proyecto. Es mi primera iteración y ya no tengo evaluaciónes de rendimimento con este diseño del sistema.
