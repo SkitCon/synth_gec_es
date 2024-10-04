@@ -11,10 +11,12 @@ import numpy as np
 import spacy
 
 COST = {"KEEP": 0,
-        "DELETE": 1,
-        "PREPEND": 2,
-        "APPEND": 2,
-        "MUTATE": 1,
+        "DELETE": 0,
+        "PRE-ADD": 2,
+        "POST-ADD": 2,
+        "PRE-COPY": 1,
+        "POST-COPY": 1,
+        "MUTATE": 0,
         "REPLACE": 3}
 
 def traceback(dp, edits):
@@ -28,11 +30,11 @@ def create_labels(errorful_sentence, correct_sentence)
     Assumes replace and relative indexing, WIP
     '''
     dp = np.zeros((len(errorful_sentence)+1, len(correct_sentence)+1))
-    dp[0, :] = list(range(dp.shape[1])) * COST["PREPEND"]
+    dp[0, :] = list(range(dp.shape[1])) * COST["PRE-ADD"]
     dp[:, 0] = list(range(dp.shape[0])) * COST["DELETE"]
     edits = np.ndarray([[""] * len(correct_sentence)+1] * len(errorful_sentence)+1)
 
-    edits[0, :] = ["PREPEND"] * edits.shape[1]
+    edits[0, :] = ["PRE-ADD"] * edits.shape[1]
     edits[:, 0] = ["DELETE"] * edits.shape[0]
 
     for i in range(1, np.shape[1])+1:
@@ -45,7 +47,7 @@ def create_labels(errorful_sentence, correct_sentence)
 
             # TODO: DELETE
 
-            # TODO: PREPEND and APPEND
+            # TODO: PRE-ADD and POST-ADD
 
             # TODO: MUTATE
 
