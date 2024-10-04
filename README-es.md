@@ -24,7 +24,7 @@ Generalmente se usa para amplificar conjuntos de datos más pequeños de alta ca
 El script principal es generate.py. Se ejecuta como:
 
 ```
-python generate.py INPUT_FILE [OUTPUT_FILE] [-n/--num-sentences] [number to generate for each origin] [-s/--seq2seq]  [-t/--token] [move-absolute, move-relative, replace]
+python generate.py INPUT_FILE [OUTPUT_FILE] [-n/--num-sentences] [number to generate for each origin] [-s/--seq2seq]  [-t/--token]
 ```
 
 Este script se usa para generar frases con errores de un archivo de corpus con frases sin errores.
@@ -34,17 +34,13 @@ Este script se usa para generar frases con errores de un archivo de corpus con f
 * --num-sentences es el número de frases con errores que se generará de cada frase original en el corpus de entrada. Por omisión es 1.
 * --seq2seq significa que los datos sintéticos de salida van a incluir las frases con errores sin etiquetas para usarlas en un sistema GEC tradicional basado en NMT (e.g. con BART o T5)
 * --token significa que los datos sintéticos de salido van a incluir las etiquetas de token para las frases con errores (lea más [abajo](#definiciones)) para usarlas en un sistema GEC de token (e.g. GECToR)
-  * --token requiere por los menos un argumento asociado: move-absolute, move-relative, o replace (una frase con errores para cada argumento asociado)
-    * move-absolute signfica que la etiqueta *MOVE* se incluirá and usará índices *absolutos* para calcular la posición final del token. Esta posición final se calcula **finalmente**.
-    * move-relative significa que la etiqueta *MOVE* se incluirá and usará índices *relativos* para calcular la posición final del token. La posición final se calcula **finalmente** y de **izquierda a derecha**.
-    * replace significa que la etiqueta *REPLACE* se incluirá en vez de *move*
    
 ### parse.py
 
 Se ejecuta como:
 
 ```
-python3 parse.py INPUT_FILE [OUTPUT_FILE] [-d/--dictionary-file] [dictionary file] [-v/--vocab-file] [vocab file] [-t/--token] [move-absolute, move-relative]
+python3 parse.py INPUT_FILE [OUTPUT_FILE] [-d/--dictionary-file] [dictionary file] [-v/--vocab-file] [vocab file]
 ```
 
 Este script se usa un archivo con frases con errores + etiquetas de token para convertirlas a frases corregidas.
@@ -53,16 +49,13 @@ Este script se usa un archivo con frases con errores + etiquetas de token para c
 * output file es opcional, defines la ruta de salida para guardar las frases corregidas. Por omisión es [input file name]_parsed.txt.
 * --dictionary-file es la ruta al archivo del diccionario que define las formas morfologías para una palabra
 * --vocab-file es la ruta al archivo de vocabulario que contiene todas las palabras en el vocabulario de tu modelo
-* --token define el tipo de índice para *MOVE* (lea más [abajo](#definiciones))
-  * move-absolute signfica que la etiqueta *MOVE* se incluirá and usará índices *absolutos* para calcular la posición final del token. Esta posición final se calcula **finalmente**.
-  * move-relative significa que la etiqueta *MOVE* se incluirá and usará índices *relativos* para calcular la posición final del token. La posición final se calcula **finalmente** y de **izquierda a derecha**
 
 ### label.py
 
 Se ejecuta como:
 
 ```
-python3 label.py INPUT_FILE [OUTPUT_FILE] [-d/--dictionary-file] [dictionary file] [-v/--vocab-file] [vocab file] [-t/--token] [move-absolute, move-relative, replace]
+python3 label.py INPUT_FILE [OUTPUT_FILE] [-d/--dictionary-file] [dictionary file] [-v/--vocab-file] [vocab file]
 ```
 
 Este script se usa frases con errores + frases sin errores y crea etiquetas de token para ellas.
@@ -71,9 +64,6 @@ Este script se usa frases con errores + frases sin errores y crea etiquetas de t
 * output file es opcional, defines la ruta de salida para guardar las etiquetas de token. Por omisión es [input file name]_labeled.txt.
 * --dictionary-file es la ruta al archivo del diccionario que define las formas morfologías para una palabra
 * --vocab-file es la ruta al archivo de vocabulario que contiene todas las palabras en el vocabulario de tu modelo
-* --token define el tipo de índice para *MOVE* (lea más [abajo](#definiciones))
-  * move-absolute signfica que la etiqueta *MOVE* se incluirá and usará índices *absolutos* para calcular la posición final del token. Esta posición final se calcula **finalmente**.
-  * move-relative significa que la etiqueta *MOVE* se incluirá and usará índices *relativos* para calcular la posición final del token. La posición final se calcula **finalmente** y de **izquierda a derecha**
 
 ## Definiciones
 
@@ -89,10 +79,9 @@ Las etiquetas de token principales son:
 * `<MUTATE type=x>`
   * Mutar la morfología de este token basado en el tipo *x*. Los tipos principales son CAPITALIZE, GENDER, NUMBER, PERSON, MOOD, y TIME. Más información [aquí](#tipos-de-mutación)
 * `<REPLACE token=i/>`
-  * Reemplacar este token con el token *i* (por índice de token en vocab.txt)
-* `<MOVE pos=i/>`
-  * Mover este token a la posición *i* (en el caso de índices absolutos) o mover este token *i* posiciones (en el caso de índices relativos).
-    * En ambos casos, el índice se basa en la posición de los tokens después de todos los cambios. En el caso de índices relativos, se mueve de izquierda a derecha.
+  * Reemplazar este token con el token *i* (por índice de token en vocab.txt)
+ 
+ 
 
 ## Tipos de Mutación
 * CAPITALIZE (ESCRIBIR CON MAYÚSCULAS)
