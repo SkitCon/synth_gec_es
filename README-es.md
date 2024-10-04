@@ -76,13 +76,17 @@ Las etiquetas de token principales son:
   * Añadir el token *i* (por índice de token en vocab.txt) justo antes de este token
 * `<POST-ADD token=i/>`
   * Añadir el token *i* (por índice de token en vocab.txt) justo después de este token
+* `<PRE-COPY token=i/>`
+  * Añadir el token *i* (por índice de token en la frase) justo antes de este token
+* `<POST-COPY token=i/>`
+  * Añadir el token *i* (por índice de token en la frase) justo después de este token
 * `<MUTATE type=x>`
   * Mutar la morfología de este token basado en el tipo *x*. Los tipos principales son CAPITALIZE, GENDER, NUMBER, PERSON, MOOD, y TIME. Más información [aquí](#tipos-de-mutación)
 * `<REPLACE token=i/>`
   * Reemplazar este token con el token *i* (por índice de token en vocab.txt)
  
-### Por qué hay ambos PRE-ADD y POST-ADD?
-PRE-ADD y POST-ADD son redundantes. En realidad, todas las transformaciones son posibles con una de estas etiquetas. Sin embargo, creo que tener ambos puede introducir más flexibilidad en la corrección de errores. Mi hipótesis es que permitir una transformación de ambos tipos entrenará una comprensión bidireccional en el model de cómo construir frases naturalmente.
+### Por qué hay ambos PRE-ADD/COPY y POST-ADD/COPY?
+PRE-ADD/COPY y POST-ADD/COPY son redundantes. En realidad, todas las transformaciones son posibles con una de estas etiquetas. Sin embargo, creo que tener ambos puede introducir más flexibilidad en la corrección de errores. Mi hipótesis es que permitir una transformación de ambos tipos entrenará una comprensión bidireccional en el model de cómo construir frases naturalmente.
 
 Por ejemplo, tenemos la frase con errores:
 
@@ -91,7 +95,7 @@ Por ejemplo, tenemos la frase con errores:
 La manera más natural de corregir este error es:
 
 ```
-<KEEP/> <KEEP/> <PRE-ADD token=muy/> <DELETE/> <KEEP/>
+<KEEP/> <KEEP/> <PRE-COPY param=3/> <DELETE/> <KEEP/>
 ```
 
 que representa la frasa correcta:
@@ -103,7 +107,7 @@ Es porque *muy* es en la misma agrupación jerárquica como *trabajador*. *muy* 
 Si solamente tuviéramos POST-ADD (i.e. APPEND), la corrección sería:
 
 ```
-<KEEP/> <POST-ADD token=muy/> <KEEP/> <DELETE/> <KEEP/>
+<KEEP/> <POST-COPY token=3/> <KEEP/> <DELETE/> <KEEP/>
 ```
 
 Mientras que funciona bien, no hay una conexión semántica entre *es* y *muy*.
@@ -171,6 +175,6 @@ convierte la frasa al:
 
 `Espero que tú corras bien.`
 
-Por lo tanto, es clasificación multietiqueta para cada token. La salida esperada para cada token es un vector de integer con la longitud de etiquetas posibles (30). Cada dimensión es binaria **excepto** que las que representan PRE-ADD/POST-ADD (value = índice del token) y REPLACE (value = índice del token).
+Por lo tanto, es clasificación multietiqueta para cada token. La salida esperada para cada token es un vector de integer con la longitud de etiquetas posibles (30). Cada dimensión es binaria **excepto** que las que representan PRE-ADD/POST-ADD (value = índice del token), PRE-COPY/POST-COPY, y REPLACE (value = índice del token).
 
 Tenga en cuente que este proyecto es un trabajo en proceso, así que me alegraría mucho recibir comentarios para ajustar las definiciones del proyecto. Es mi primera iteración y ya no tengo evaluaciónes de rendimimento con este diseño del sistema.
