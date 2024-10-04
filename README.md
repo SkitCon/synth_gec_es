@@ -82,7 +82,7 @@ This script takes errorful sentences + target sentences and translates them into
 The valid main token-level labels are:
 * `<KEEP/>`
   * No change to the token
-* <DELETE/>
+* `<DELETE/>`
   * Delete the token
 * `<PRE-ADD token=i/>`
   * Add the given token (based on token index in vocab.txt) immediately before this token
