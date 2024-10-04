@@ -80,6 +80,8 @@ Este script se usa frases con errores + frases sin errores y crea etiquetas de t
 Las etiquetas de token principales son:
 * `<KEEP/>`
   * No cambiar el token
+* `<DELETE/>`
+  * Borrar el token
 * `<PRE-ADD token=i/>`
   * Añadir el token *i* (por índice de token en vocab.txt) justo antes de este token
 * `<POST-ADD token=i/>`
