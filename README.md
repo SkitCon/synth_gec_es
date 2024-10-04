@@ -76,13 +76,17 @@ The valid main token-level labels are:
   * Add the given token (based on token index in vocab.txt) immediately before this token
 * `<POST-ADD param=i/>`
   * Add the given token (based on token index in vocab.txt) immediately after this token
+* `<PRE-COPY param=i/>`
+  * Add the given token (based on token index in the sentence) immediately before this token
+* `<POST-COPY param=i/>`
+  * Add the given token (based on token index in the sentence) immediately after this token
 * `<MUTATE param=i>`
   * Mutate the morphology of this token based on a given type. Major types include CAPITALIZE, GENDER, NUMBER, PERSON, MOOD, and TIME. Further discussion [here](#mutation-types)
 * `<REPLACE param=i/>`
   * Replace this token with the given token (based on token index in vocab.txt)
 
-### Why Both PRE- and POST-ADD?
-PRE-ADD and POST-ADD are redundant. In reality, all sentence transformations are obviously possible with only one of these. However, I believe having both possible transformations may allow for more flexibility in error correction. My hypothesis is that allowing a token to be tagged w/ either ADD type will train a more bidirectional understanding of how to build phrases.
+### Why Both PRE- and POST-ADD/COPY?
+PRE-ADD/COPY and POST-ADD/COPY are redundant. In reality, all sentence transformations are obviously possible with only one of these. However, I believe having both possible transformations may allow for more flexibility in error correction. My hypothesis is that allowing a token to be tagged w/ either ADD type will train a more bidirectional understanding of how to build phrases.
 
 For example, lets say we have the incorrect sentence:
 
@@ -91,7 +95,7 @@ For example, lets say we have the incorrect sentence:
 The most natural way to correct this is:
 
 ```
-<KEEP/> <KEEP/> <PRE-ADD token=muy/> <DELETE/> <KEEP/>
+<KEEP/> <KEEP/> <PRE-COPY param=3/> <DELETE/> <KEEP/>
 ```
 
 which results in:
@@ -103,7 +107,7 @@ This is because *muy* is in the same hierarchical grouping as *trabajador*. *muy
 If we only had POST-ADD (i.e. APPEND), the correction would be:
 
 ```
-<KEEP/> <POST-ADD token=muy/> <KEEP/> <DELETE/> <KEEP/>
+<KEEP/> <POST-COPY param=3/> <KEEP/> <DELETE/> <KEEP/>
 ```
 
 While this works fine, there is not a semantic connection between *es* and *muy*.
@@ -171,7 +175,7 @@ changes the sentence to:
 
 `Espero que tú corras bien.`
 
-This means that this defines a *multi-label classification task* for each token. The expected output for each token is an integer vector with the length of the number of possible labels (30). Each label dimension is binary **except** PRE-ADD/POST-ADD (value = token index) and REPLACE (value = token index).
+This means that this defines a *multi-label classification task* for each token. The expected output for each token is an integer vector with the length of the number of possible labels (30). Each label dimension is binary **except** PRE-ADD/POST-ADD (value = token index), PRE-COPY/POST-COPY, and REPLACE (value = token index).
 
 Note this is still a WIP, so I'm happy to take feedback for adjustments of this formatting. This is my first iteration and I do not yet have performance evaluations with this task design.
 
