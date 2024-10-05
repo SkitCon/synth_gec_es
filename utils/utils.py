@@ -9,8 +9,13 @@ from collections import deque
 from custom_errors import InvalidLabelException
 from custom_errors import NotInDictionaryException
 
-GENDERS = ["MASC", "FEM"] # No non-binary :( RAE dice que no
+# TODO
+# Implement final version of lemma_to_lex dict w/ final set of features
+
+GENDERS = ["MASC", "FEM", "NEUT"] # No non-binary :( RAE dice que no
 NUMBERS = ["SING", "PLU"]
+DETERMINANT = ["DET", "INDET"]
+DISTANCE = ["CLOSE", "FAR", "FAR+"]
 MOODS = ["IND", "POS-IMP", "NEG-IMP", "SUBJ", "PROG", "PERF", "PERF-SUBJ", "GER", "PAST-PART", "INF"]
 TIMES = ["PRES", "PRET", "IMPERF", "COND", "FUT"]
 PERSONS = ["1", "2", "3"]
@@ -29,11 +34,13 @@ def load_lex_dict(filename):
     :return lemma_to_lex (dict): a dictionary that maps the base form of a word to all of its
         lexical forms in hierarhical format of
             LEMMA
-            |- NUMBER
-                |- GENDER,
-                |- MOOD,
-                    |- TIME
-                        |- PERSON
+            |- POS
+                |- NUMBER
+                    |- GENDER,
+                       |- DET,
+                    |- MOOD,
+                        |- TIME
+                            |- PERSON
         **IMPORTANT**: Note that in this dictionary the infinitive is given a number, time, and
             person (sing, pres, 1st) to enable transformations FROM infinitives. Essentially, this
             determination defines the *default* form of a verb which previously did not have these
@@ -71,6 +78,9 @@ def get_path(word, lexemes):
 
     :return path ([str]): the path to the given word in the lexemes dict
     '''
+    # TODO Add disambiguation code using POS + dependent noun (verbs)
+    # If verb and dependent noun is not present assumption hierarchy is based on order in
+    # above dictionaries
     for number in NUMBERS:
         for gender in GENDERS:
             if lexemes[number][gender] == word:
