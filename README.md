@@ -12,13 +12,7 @@ Generally to be used to augment smaller high-quality training sets as in *GECToR
 
 These are just for me to record what needs to be done, especially as many of these problems are absolutely not trivial
 
-* First priority is completing the morphology dictionary, haven't been able to find anything exactly like what I want besides maybe scraping WordReference or Spanish Dictionary. Essentially, my goal is to to create a surface realization model for Spanish w/ a dictionary
-  * I'd like to avoid needing to scrape this entire thing myself, so I am leaning on existing dump parses of resources like Wikitionary
-  * Noun/pronoun/article/adjective/adverb morphology is *mostly* solvable with parsed Wikitionary dump, /tatuylonen/wiktextract has kindly already done this
-  * Wikitionary is missing mood and has inconsistent specificity of verb categories
-  * Verb categories (most complex) can most likely be generated from /ghidinelli/fred-jehle-spanish-verbs/
-  * Therefore, the data is there, just need to reconcile these two sources
-* Second priority is implementing decoding logic (incorrect sentence + labels -> corrected sentence)
+* First priority is implementing decoding logic (incorrect sentence + labels -> corrected sentence)
   * Getting this working correctly will allow finalization of label schema (at least for v1)
   * Current WIP features for this:
     * Determine *current* morphosyntactic categories, requirement for mutate to work correctly (e.g. need to be able to change mood while maintaing current time, person, and number)
@@ -169,6 +163,13 @@ In a simplified syntax tree we can see this easily:
 * NUMBER (NÚMERO)
   * SING - makes the word singular
   * PLU - makes the word plural
+* DEFINITE
+  * DEF - makes the word definite
+  * IND - makes the word indefinite
+* CASE
+  * NOM - makes the word nominative
+  * ACC - makes the word accusative
+  * DAT - makes the word dative
 * PERSON (PERSONA)
   * 1 - makes the word first-person (must be verb)
     * e.g. son + `<MUTATE type=PERSON-1` = somos
@@ -176,9 +177,7 @@ In a simplified syntax tree we can see this easily:
   * 3 - makes the word third-person (must be verb)
 * MOOD (MODO)
   * IND (INDICATIVO) - makes the word indicative in mood (must be verb)
-  * POS-IMP (IMPERATIVO AFIRMATIVO) - makes the word positive imperative in mood (must be verb)
-  * NEG-IMP (IMPERATIVO NEGATIVO) - makes the word positive imperative in mood (must be verb) (adds *no* before the verb)
-  * SUBJ (SUBJUNTIVO) - makes the word subjunctive in mood (must be verb)
+  * SUB (SUBJUNTIVO) - makes the word subjunctive in mood (must be verb)
   * PROG (PROGRESIVO) - makes the word progressive in mood (must be verb) (adds the correct conjugation of *estar* before the verb)
   * PERF (PERFECTO) - makes the word perfect in mood (must be verb) (adds the correct conjugation of *haber* before the verb)
   * PERF-SUBJ (PERFECTO SUBJUNCTIVO) - makes the word perfect subjunctive in mood (must be verb) (adds the correct conjugation of *haber* before the verb)
@@ -188,8 +187,8 @@ In a simplified syntax tree we can see this easily:
 * TIME (TIEMPO)
   * PRES (PRESENTE)
   * PRET (PRETÉTERITO)
-  * IMPERF (IMPERFECTO)
-  * COND (CONDICIONAL)
+  * IMP (IMPERFECTO)
+  * CND (CONDICIONAL)
   * FUT (FUTURO)
 
 ## Token-Label Stacking
