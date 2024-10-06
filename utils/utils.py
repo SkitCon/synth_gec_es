@@ -18,7 +18,7 @@ from custom_errors import NotInDictionaryException
 POS = ["NOUN", "PRONOUN", "VERB", "ARTICLE", "ADJ", "ADV"]
 GENDERS = ["MASC", "FEM"] # No non-binary :( RAE dice que no
 NUMBERS = ["SING", "PLU"]
-DETERMINANT = ["DET", "IND"]
+DEFINITE = ["DEF", "IND"]
 CASE = ["NOM", "ACC", "DAT"]
 MOODS = ["IND", "SUB", "PROG", "PERF", "PERF-SUB", "GER", "PAST-PART", "INF"]
 TIMES = ["PRES", "PRET", "IMP", "CND", "FUT"]
