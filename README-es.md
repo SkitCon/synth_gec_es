@@ -11,7 +11,7 @@ Generalmente se usa para amplificar conjuntos de datos más pequeños de alta ca
 ## Índice de Materias
 * [Scripts](#scripts)
   * [generate.py](#generate.py)
-  * [parse.py](#parse.py)
+  * [decode.py](#decode.py)
   * [label.py](#label.py)
 * [Definiciones](#definiciones)
 * [Tipos de Mutación](#tipos-de-mutación)
@@ -35,12 +35,12 @@ Este script se usa para generar frases con errores de un archivo de corpus con f
 * --seq2seq significa que los datos sintéticos de salida van a incluir las frases con errores sin etiquetas para usarlas en un sistema GEC tradicional basado en NMT (e.g. con BART o T5)
 * --token significa que los datos sintéticos de salido van a incluir las etiquetas de token para las frases con errores (lea más [abajo](#definiciones)) para usarlas en un sistema GEC de token (e.g. GECToR)
    
-### parse.py
+### decode.py
 
 Se ejecuta como:
 
 ```
-python3 parse.py INPUT_FILE [OUTPUT_FILE] [-d/--dictionary-file] [dictionary file] [-v/--vocab-file] [vocab file]
+python3 decode.py INPUT_FILE [OUTPUT_FILE] [-d/--dictionary-file] [dictionary file] [-v/--vocab-file] [vocab file]
 ```
 
 Este script se usa un archivo con frases con errores + etiquetas de token para convertirlas a frases corregidas.
