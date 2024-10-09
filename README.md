@@ -103,7 +103,7 @@ The valid main token-level labels are:
   * Add the given token (based on token index in the sentence) immediately before this token
 * `<POST-COPY param=i/>`
   * Add the given token (based on token index in the sentence) immediately after this token
-* `<MUTATE param=i>`
+* `<MUTATE param=i/>`
   * Mutate the morphology of this token based on a given type. Major types include CAPITALIZE, GENDER, NUMBER, PERSON, MOOD, and TIME. Further discussion [here](#mutation-types)
 * `<REPLACE param=i/>`
   * Replace this token with the given token (based on token index in vocab.txt)
