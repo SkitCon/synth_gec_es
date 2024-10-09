@@ -34,7 +34,7 @@ These are just for me to record what needs to be done, especially as many of the
 ## Table of Contents
 * [Scripts](#scripts)
   * [generate.py](#generate.py)
-  * [parse.py](#parse.py)
+  * [decode.py](#decode.py)
   * [label.py](#label.py)
 * [Definitions](#definitions)
 * [Mutation Types](#mutation-types)
@@ -58,15 +58,15 @@ This script generates synthetic errorful sentences from well-formed Spanish sent
 * --seq2seq means the output synthetic data will include the raw errorful sentence unlabeled for use in a traditional NMT-based seq2seq GEC system (as with BART or T5)
 * --token means the output synthetic data will include token-level labels for the errorful sentence (discussed [below](#definitions)) for use in a token-level GEC system (as with GECToR)
 
-### parse.py
+### decode.py
 
 Ran as:
 
 ```
-python3 parse.py INPUT_FILE [OUTPUT_FILE] [-d/--dictionary-file] [dictionary file] [-v/--vocab-file] [vocab file]
+python3 decode.py INPUT_FILE [OUTPUT_FILE] [-d/--dictionary-file] [dictionary file] [-v/--vocab-file] [vocab file]
 ```
 
-This script takes errorful sentences + token-level labels and parses them into a corrected sentence.
+This script takes errorful sentences + token-level labels and decodes them into a corrected sentence.
 
 * input file is a path to a file with a sentence on one line, the respective token-level labels on the next line, and a blank line before the next sentence
 * output file is optional, defines the output path to place the parsed sentences in. If no output path is supplied, it is placed in the same directory as the input file w/ the name [input file name]_parsed.txt.
