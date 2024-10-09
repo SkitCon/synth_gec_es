@@ -11,7 +11,8 @@ import spacy
 
 from utils.utils import load_vocab, load_lex_dict, apply_labels
 
-TESTS = [("Voy al tienda.", "<KEEP/>\t<REPLACE param=\"1013\"/>\t<PRE-ADD param=\"1030\"/>\t<KEEP/>")]
+TESTS = [("Voy al tienda.", "<KEEP/>\t<REPLACE param=\"1013\"/>\t<PRE-ADD param=\"1030\"/>\t<KEEP/>", "Voy a la tienda."),
+         ("espero que estudias más.", "<MUTATE param=\"CAPITALIZE-TRUE\"/>\t<KEEP/>\t<MUTATE param=\"MOOD-SUBJ\"/>\t<KEEP/>\t<KEEP/>", "Espero que estudies más.")]
 
 
 class TestApply(unittest.TestCase):
@@ -21,12 +22,13 @@ class TestApply(unittest.TestCase):
         self.lemma_to_morph = load_lex_dict("lang_def/morph_dict.json")
 
     def test_replace(self):
-        self.assertEqual(apply_labels(self.nlp(TESTS[0][0]),
-                                               TESTS[0][1].split('\t'),
-                                               self.lemma_to_morph,
-                                               self.vocab,
-                                               self.nlp),
-                         "Voy a la tienda.")
+        for TEST in TESTS:
+            self.assertEqual(apply_labels(self.nlp(TEST[0]),
+                                                    TEST[1].split('\t'),
+                                                    self.lemma_to_morph,
+                                                    self.vocab,
+                                                    self.nlp),
+                            TEST[2])
 
 if __name__ == "__main__":
     unittest.main()
