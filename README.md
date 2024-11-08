@@ -8,29 +8,6 @@ Generally to be used to augment smaller high-quality training sets as in *GECToR
 
 **WORK IN PROGRESS**
 
-## Major TODOs
-
-These are just for me to record what needs to be done, especially as many of these problems are absolutely not trivial
-
-* First priority is implementing decoding logic (incorrect sentence + labels -> corrected sentence)
-  * Getting this working correctly will allow finalization of label schema (at least for v1)
-  * Current WIP features for this:
-    * Determine *current* morphosyntactic categories, requirement for mutate to work correctly (e.g. need to be able to change mood while maintaing current time, person, and number)
-      * ~requires disambiguation based on POS tag and dependent noun (offloading most disambiguation logic onto existing dependency tree models), placeholder logic just picks first exact match~ spaCy has a built-in morphology analysis that works great for Spanish, **solved problem** 
-        * disambiguation needs to be able to correct itself if the mutation is incompatible with the current categories (e.g. if it thought *coma* was a singular noun, but then receives a `<MUTATE param=MOOD-IND/>`, it should understand its initial determination was incorrect and try again with the knowledge that the POS tag is actually VERB (this is an especially complicated case because we would also need to correct the lemma (*coma* vs. *comer*), an exceptional case where both the lemmatizer and POS tagger failed)
-        * ~need default hierarchy for categories if certain categories are impossible to resolve (e.g. *que trabaje mejor* could be *que (yo) trabaje mejor* or *que (él) trabaje mejor*)~ **solved by spaCy**, but will have a fallback default hierarchy for each POS just in case
-    * Need to finalize how to handle clitic pronouns (e.g. *te amo* and *cómetelas*), right now they are treated as separate tokens to simplify mutate logic
-      * Probably should not be treated as separate tokens in final version because reversal is required for edge case POS-IMP -> NEG-IMP and vice versa (e.g. *no te muevas* vs. *muévate*). However, this transformation is still possible because we can just use DELETE + COPY to reverse the position of each pronoun. I'd like to simplify this as it is a common error, but at some point I may need to stop diving too deep into creating error-specific logic. Almost feels like I'm accidentally trying to make a rule-based GEC system just to solve this synthetic data problem.
-      * Overall, implementing implicit reversal logic seems like a bad call. I may be thinking too much about this specific syntactic transformation because clitic pronouns in imperative sentences in Spanish has been a research interest of mine
-  * Unsolved:
-    * How to handle orthographic errors, currently solved by replace (expensive, to be avoided), but should be cheap, maybe add a cheaper operation than replace (but more expensive than mutate) if edit distance between mispelling and correction is below a threshold (same actual calculation cost in a model as it requires an index the size of the vocabulary, but could be more useful in explanation generation)
-* Finish tests (**test-driven development brain worms**)
-* Design and implement labelling algorithm for errorful + correct pairs. Should be able to adapt minimum edit distance + backtrack to my transformations, but the specifics currently vex me. Solving this algorithm in an efficient manner is why I removed the MOVE transformation in favor of a reduced cost COPY + DELETE.
-* Design some form of error definition config format for generate.py. I could hard-code error types, but I think it makes more sense to have an easy way to add error types if someone (including me) realizes a type of error is missing.
-  * Currently, the error types I can think of that need to be generated are subject-verb disagreement, gender disagreement, incorrect case (e.g. *tú* vs. *ti*), common word usage errors (e.g. *bien* vs. *bueno*, *por* vs. *para*), grammatically impossible mood (e.g. *\*ojalá se rinde* has the wrong mood), erroneous inclusion of a word (especially preposition or article), missing word (especially preposition or article), orthographic error, and capitalizaition error
-    * Ugh, but what about cases where the generation of the error isn't actually an error (e.g. *soy feliz* and *estoy feliz* are both grammatically fine, a correction requires knowledge of intent (are they a happy person or just feeling happy?))
-    * This system is *defining* the patterns of grammatical errors, then translating it to a format a neural model can understand and extrapolate from. This is why this synthetic data should *augment* an existing GEC training dataset which will contain missing errors not found in this synthetic data. Flexibility of the model will improve the more errors are included here
-
 ## Table of Contents
 * [Scripts](#scripts)
   * [generate.py](#generate.py)
@@ -207,4 +184,25 @@ This means that this defines a *multi-label classification task* for each token.
 
 Note this is still a WIP, so I'm happy to take feedback for adjustments of this formatting. This is my first iteration and I do not yet have performance evaluations with this task design.
 
-  
+# Major TODOs
+
+These are just for me to record what needs to be done, especially as many of these problems are absolutely not trivial
+
+* First priority is implementing decoding logic (incorrect sentence + labels -> corrected sentence)
+  * Getting this working correctly will allow finalization of label schema (at least for v1)
+  * Current WIP features for this:
+    * Determine *current* morphosyntactic categories, requirement for mutate to work correctly (e.g. need to be able to change mood while maintaing current time, person, and number)
+      * ~requires disambiguation based on POS tag and dependent noun (offloading most disambiguation logic onto existing dependency tree models), placeholder logic just picks first exact match~ spaCy has a built-in morphology analysis that works great for Spanish, **solved problem** 
+        * disambiguation needs to be able to correct itself if the mutation is incompatible with the current categories (e.g. if it thought *coma* was a singular noun, but then receives a `<MUTATE param=MOOD-IND/>`, it should understand its initial determination was incorrect and try again with the knowledge that the POS tag is actually VERB (this is an especially complicated case because we would also need to correct the lemma (*coma* vs. *comer*), an exceptional case where both the lemmatizer and POS tagger failed)
+        * ~need default hierarchy for categories if certain categories are impossible to resolve (e.g. *que trabaje mejor* could be *que (yo) trabaje mejor* or *que (él) trabaje mejor*)~ **solved by spaCy**, but will have a fallback default hierarchy for each POS just in case
+    * Need to finalize how to handle clitic pronouns (e.g. *te amo* and *cómetelas*), right now they are treated as separate tokens to simplify mutate logic
+      * Probably should not be treated as separate tokens in final version because reversal is required for edge case POS-IMP -> NEG-IMP and vice versa (e.g. *no te muevas* vs. *muévate*). However, this transformation is still possible because we can just use DELETE + COPY to reverse the position of each pronoun. I'd like to simplify this as it is a common error, but at some point I may need to stop diving too deep into creating error-specific logic. Almost feels like I'm accidentally trying to make a rule-based GEC system just to solve this synthetic data problem.
+      * Overall, implementing implicit reversal logic seems like a bad call. I may be thinking too much about this specific syntactic transformation because clitic pronouns in imperative sentences in Spanish has been a research interest of mine
+  * Unsolved:
+    * How to handle orthographic errors, currently solved by replace (expensive, to be avoided), but should be cheap, maybe add a cheaper operation than replace (but more expensive than mutate) if edit distance between mispelling and correction is below a threshold (same actual calculation cost in a model as it requires an index the size of the vocabulary, but could be more useful in explanation generation)
+* Finish tests (**test-driven development brain worms**)
+* Design and implement labelling algorithm for errorful + correct pairs. Should be able to adapt minimum edit distance + backtrack to my transformations, but the specifics currently vex me. Solving this algorithm in an efficient manner is why I removed the MOVE transformation in favor of a reduced cost COPY + DELETE.
+* Design some form of error definition config format for generate.py. I could hard-code error types, but I think it makes more sense to have an easy way to add error types if someone (including me) realizes a type of error is missing.
+  * Currently, the error types I can think of that need to be generated are subject-verb disagreement, gender disagreement, incorrect case (e.g. *tú* vs. *ti*), common word usage errors (e.g. *bien* vs. *bueno*, *por* vs. *para*), grammatically impossible mood (e.g. *\*ojalá se rinde* has the wrong mood), erroneous inclusion of a word (especially preposition or article), missing word (especially preposition or article), orthographic error, and capitalizaition error
+    * Ugh, but what about cases where the generation of the error isn't actually an error (e.g. *soy feliz* and *estoy feliz* are both grammatically fine, a correction requires knowledge of intent (are they a happy person or just feeling happy?))
+    * This system is *defining* the patterns of grammatical errors, then translating it to a format a neural model can understand and extrapolate from. This is why this synthetic data should *augment* an existing GEC training dataset which will contain missing errors not found in this synthetic data. Flexibility of the model will improve the more errors are included here
