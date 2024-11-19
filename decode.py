@@ -17,8 +17,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("input_file", help="path to a file with a sentence on one line, the respective token-level labels on the next line, and a blank line before the next sentence")
     parser.add_argument("output_file", help="optional, defines the output path to place the parsed sentences in")
-    parser.add_argument("-d", "--dict-file", help="path to the dictionary file which supplies different morphological forms for a word")
-    parser.add_argument("-v", "--vocab-file", help="path to the vocab file containing all words in your model's vocabulary")
+    parser.add_argument("--dict_file", default="lang_def/morpho_dict.json", help="path to the dictionary file which supplies different morphological forms for a word")
+    parser.add_argument("--vocab_file", default="lang_def/vocab.txt", help="path to the vocab file containing all words in your model's vocabulary")
 
     args = parser.parse_args()
 

@@ -1,3 +1,4 @@
+
 '''
 File: create_morpho_dict.py
 Author: Amber Converse
@@ -6,6 +7,7 @@ Purpose: This file creates the morphological dict for surface realization from 2
     the verb forms for Spanish verbs.
 '''
 
+import re
 import json
 import argparse
 import pandas as pd
@@ -101,26 +103,27 @@ def get_col_name(number, person, formality=None):
         
 def fill_dict(row):
     lemma = row["infinitive"]
+    # Avoid problems with something like mudar(se) which for the purposes of the dict is just mudar
+    lemma = re.sub(r"\([A-z]*\)", '', lemma)
     mood = translate_mood(row["mood"])
     time = translate_time(row["tense"])
     if not time: # if invalid time, skip
         return
     for number in ["SING", "PLUR"]:
         for person in ["1", "2", "3"]:
-            if not person == "2":
-                col_name = get_col_name(number, person)
-                lemma_to_morph[lemma][number][mood][time][person]["SURFACE_FORM"] = row[col_name]
+            col_name = get_col_name(number, person)
+            lemma_to_morph[lemma]["VERB"][number][mood][time][person]["SURFACE_FORM"] = row[col_name]
     
     # For special versions
     for mood in ["GER", "PAST-PART", "INF"]:
         if mood == "GER":
-            lemma_to_morph[lemma][mood]["SURFACE_FORM"] = row["gerund"]
+            lemma_to_morph[lemma]["VERB"][mood]["SURFACE_FORM"] = row["gerund"]
         elif mood == "PART-PART":
-            lemma_to_morph[lemma][mood]["SURFACE_FORM"] = row["pastparticiple"]
+            lemma_to_morph[lemma]["VERB"]["SURFACE_FORM"] = row["pastparticiple"]
         elif mood == "INF":
-            lemma_to_morph[lemma][mood]["SURFACE_FORM"] = lemma
+            lemma_to_morph[lemma]["VERB"]["SURFACE_FORM"] = lemma
 
-def create_default_dict(wiki_file, verb_forms_file, output_file):
+def create_default_dict(wiki_file, verb_forms_file, output_file, manual_entries_file):
     global lemma_to_morph
 
     words = []
@@ -168,6 +171,12 @@ def create_default_dict(wiki_file, verb_forms_file, output_file):
     df = pd.read_csv(verb_forms_file)
 
     df.apply(fill_dict, axis=1)
+    
+    # Overwrite with manual entries
+    with open(manual_entries_file, 'r') as f:
+        manual_entries = json.load(f)
+    for key, val in manual_entries.items():
+        lemma_to_morph[key] = val
 
     with open(output_file, 'w') as f:
         json.dump(lemma_to_morph, f)
@@ -177,6 +186,7 @@ if __name__ == "__main__":
     parser.add_argument("input1", help="path to Wikitionary JSONL parse")
     parser.add_argument("input2", help="path to verb forms CSV")
     parser.add_argument("output", help="output_path")
+    parser.add_argument("--manual", help="path to manual entries file")
 
     args = parser.parse_args()
 
@@ -185,4 +195,4 @@ if __name__ == "__main__":
     else:
          output_file = args.output
 
-    create_default_dict(args.input1, args.input2, output_file)
+    create_default_dict(args.input1, args.input2, output_file, args.manual)
