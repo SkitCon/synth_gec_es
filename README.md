@@ -2,14 +2,12 @@
 [![en](https://img.shields.io/badge/lang-en-red.svg)](README.md)
 [![es](https://img.shields.io/badge/lang-es-yellow.svg)](README-es.md)
 
-
 SYNTHetic Grammatical Error Correction for Spanish (ES) is a system for generating synthetic GEC data for common Spanish grammatical errors to train a GEC model.
 
 To be used to augment smaller high-quality training sets as in *GECToR – Grammatical Error Correction: Tag, Not Rewrite* (2020)
 
 **WORK IN PROGRESS**
 
-<<<<<<< HEAD
 Required libraries for all scripts:
 ```
 bs4 == 0.0.2
@@ -17,8 +15,6 @@ spacy == 3.7.6
 unidecode == 1.3
 ```
 
-=======
->>>>>>> e748524b227cc8b5d11a763301ecbe96c765d72b
 ## Table of Contents
 * [Scripts](#scripts)
   * [generate.py](#generate.py)
