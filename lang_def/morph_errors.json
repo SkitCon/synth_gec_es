@@ -1,0 +1,82 @@
+[
+    {
+        "name": "Change number",
+        "type": "morph",
+        "criteria": "^*$",
+        "criteria_pos": ["NOUN", "ADJ", "ADV", "PRONOUN", "PERSONAL_PRONOUN", "ARTICLE", "VERB"],
+        "output": [],
+        "weight": 1,
+        "match_morph": true,
+        "mutate_categories": ["NUMBER"]
+    },
+    {
+        "name": "Change gender",
+        "type": "morph",
+        "criteria": "^*$",
+        "criteria_pos": ["NOUN", "ADJ", "ADV", "PRONOUN", "PERSONAL_PRONOUN", "ARTICLE"],
+        "output": [],
+        "weight": 1,
+        "match_morph": true,
+        "mutate_categories": ["GENDER"]
+    },
+    {
+        "name": "Change case",
+        "type": "morph",
+        "criteria": "^*$",
+        "criteria_pos": ["PRONOUN", "PERSONAL_PRONOUN"],
+        "output": [],
+        "weight": 1,
+        "match_morph": false,
+        "mutate_categories": ["CASE"]
+    },
+    {
+        "name": "Change pronoun type or reflexive",
+        "type": "morph",
+        "criteria": "^*$",
+        "criteria_pos": ["PERSONAL_PRONOUN"],
+        "output": [],
+        "weight": 1,
+        "match_morph": false,
+        "mutate_categories": ["PRONOUN_TYPE", "REFLEXIVE"]
+    },
+    {
+        "name": "Change definite",
+        "type": "morph",
+        "criteria": "^*$",
+        "criteria_pos": ["ARTICLE"],
+        "output": [],
+        "weight": 1,
+        "match_morph": false,
+        "mutate_categories": ["DEFINITE"]
+    },
+    {
+        "name": "Change mood",
+        "type": "morph",
+        "criteria": "^*$",
+        "criteria_pos": ["VERB"],
+        "output": [],
+        "weight": 1,
+        "match_morph": true,
+        "mutate_categories": ["MOOD"]
+    },
+    {
+        "name": "Change time",
+        "type": "morph",
+        "criteria": "^*$",
+        "criteria_pos": ["VERB"],
+        "output": [],
+        "weight": 1,
+        "match_morph": true,
+        "mutate_categories": ["TIME"]
+    },
+    {
+        "name": "Change person",
+        "type": "morph",
+        "criteria": "^*$",
+        "criteria_pos": ["VERB"],
+        "output": [],
+        "weight": 1,
+        "match_morph": true,
+        "mutate_categories": ["PERSON"]
+    }
+]

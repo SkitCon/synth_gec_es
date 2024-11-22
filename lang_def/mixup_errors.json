@@ -1,0 +1,62 @@
+[
+    {
+        "name": "Por v. Para",
+        "type": "mixup",
+        "criteria": "^(por)|(para)$",
+        "criteria_pos": [],
+        "output": ["por", "para"],
+        "weight": 1,
+        "match_morph": false,
+        "mutate_categories": []
+    },
+    {
+        "name": "Qué v. Cual",
+        "type": "mixup",
+        "criteria": "^(qu(é|e))|(cu(a|á)l)$",
+        "criteria_pos": [],
+        "output": ["qué", "cuál"],
+        "weight": 1,
+        "match_morph": false,
+        "mutate_categories": []
+    },
+    {
+        "name": "Qué v. Cual v. Quién",
+        "type": "mixup",
+        "criteria": "^(qu(é|e))|(cu(á|a)l)|(qui(é|e)n)$",
+        "criteria_pos": [],
+        "output": ["qué", "cuál", "quién"],
+        "weight": 1,
+        "match_morph": false,
+        "mutate_categories": []
+    },
+    {
+        "name": "Ser v. Estar",
+        "type": "mixup",
+        "criteria": "^(ser)|(estar)$",
+        "criteria_pos": [],
+        "output": ["ser", "estar"],
+        "weight": 1,
+        "match_morph": false,
+        "mutate_categories": []
+    },
+    {
+        "name": "Conocer v. Saber",
+        "type": "mixup",
+        "criteria": "^(conocer)|(saber)$",
+        "criteria_pos": ["VERB"],
+        "output": ["conocer", "saber"],
+        "weight": 1,
+        "match_morph": true,
+        "mutate_categories": []
+    },
+    {
+        "name": "Traer v. Llevar",
+        "type": "mixup",
+        "criteria": "^(traer)|(llevar)$",
+        "criteria_pos": [],
+        "output": ["traer", "llevar"],
+        "weight": 1,
+        "match_morph": true,
+        "mutate_categories": []
+    }
+]

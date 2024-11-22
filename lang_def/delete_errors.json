@@ -1,0 +1,52 @@
+[
+    {
+        "name": "Delete anything",
+        "type": "delete",
+        "criteria": "^*$",
+        "criteria_pos": [],
+        "output": [],
+        "weight": 1,
+        "match_morph": false,
+        "mutate_categories": []
+    },
+    {
+        "name": "Delete pronoun",
+        "type": "delete",
+        "criteria": "^*$",
+        "criteria_pos": ["PRONOUN", "PERSONAL_PRONOUN"],
+        "output": [],
+        "weight": 1,
+        "match_morph": false,
+        "mutate_categories": []
+    },
+    {
+        "name": "Delete noun",
+        "type": "delete",
+        "criteria": "^*$",
+        "criteria_pos": ["NOUN"],
+        "output": [],
+        "weight": 1,
+        "match_morph": false,
+        "mutate_categories": []
+    },
+    {
+        "name": "Delete verb",
+        "type": "delete",
+        "criteria": "^*$",
+        "criteria_pos": ["VERB"],
+        "output": [],
+        "weight": 1,
+        "match_morph": false,
+        "mutate_categories": []
+    },
+    {
+        "name": "Delete article",
+        "type": "delete",
+        "criteria": "^*$",
+        "criteria_pos": ["ARTICLE"],
+        "output": [],
+        "weight": 1,
+        "match_morph": false,
+        "mutate_categories": []
+    }
+]

@@ -353,7 +353,7 @@ def main(input_file, output_file, lemma_to_morph, vocab, verify=False):
                 correct_sentence = sentence_pairs[i][1]
                 token_labels = labels[i]
 
-                decoded_sentence = apply_labels(nlp(errorful_sentence), token_labels.split('\t'), lemma_to_morph, vocab, vocab)
+                decoded_sentence = apply_labels(nlp(errorful_sentence), token_labels.split('\t'), lemma_to_morph, vocab, nlp)
                 if decoded_sentence != correct_sentence:
                     print(f"VERIFY FAILED!\nReport:\n\tErrorful Sentence:{errorful_sentence}\n\tGenerated Labels:{token_labels}\n\tTarget:{correct_sentence}\n\tResult from Decode:{decoded_sentence}")
 

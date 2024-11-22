@@ -21,18 +21,32 @@ DEFAULT_PATH_FOR_POS = {"NOUN": ["SING", "MASC", "SURFACE_FORM"],
                          "PRONOUN": ["SING", "MASC", "NOM", "SURFACE_FORM"],
                          "PERSONAL_PRONOUN": ["SING", "MASC", "NOM", "BASE", "NO", "SURFACE_FORM"],
                          "ARTICLE": ["SING", "MASC", "DEF", "SURFACE_FORM"],
-                         "VERB": ["SING", "IND", "PRES", "3", "SURFACE_FORM"]}
+                         "VERB": ["SING", "IND", "PRES", "3", "SURFACE_FORM"],
+                         "X": ["POS", "SURFACE_FORM"]}
 
 POS = ["NOUN", "PRONOUN", "PERSONAL_PRONOUN", "VERB", "ARTICLE", "ADJ", "ADV"]
 GENDERS = ["MASC", "FEM"] # No non-binary :( RAE dice que no
 NUMBERS = ["SING", "PLUR"]
 DEFINITE = ["DEF", "IND"]
 CASE = ["NOM", "ACC", "DAT"]
-MOODS = ["IND", "SUB", "PROG", "PERF", "PERF-SUB", "GER", "PAST-PART", "INF"]
+MOODS = ["IND", "SUB", "GER", "PAST-PART", "INF"]
 TIMES = ["PRES", "PRET", "IMP", "CND", "FUT"]
 PERSONS = ["1", "2", "3"]
 PRONOUN_TYPES = ["BASE", "CLITIC"]
 REFLEXIVE = ["YES", "NO"]
+
+AVAILABLE_TYPES = {"POS": POS,
+                   "GENDER": GENDERS,
+                   "NUMBER": NUMBERS,
+                   "DEFINITE": DEFINITE,
+                   "CASE": CASE,
+                   "MOOD": MOODS,
+                   "TIME": TIMES,
+                   "PERSON": PERSONS,
+                   "PRONOUN_TYPE": PRONOUN_TYPES,
+                   "REFLEXIVE": REFLEXIVE}
+
+
 HIERARCHY_DEF = {"POS": 0,
                     "NUMBER": 1,
                     "MOOD": [1,2],
@@ -117,7 +131,9 @@ def get_path(token):
     '''
     pos = UPOS_TO_SIMPLE[token.pos_]
     if pos == "PRONOUN": # Determine if needs extra categories
-        if token.text.lower() in {"yo", "me", "mí", "tú", "te", "ti", "usted", "le", "lo", "la", "se", "él", "ella", "nosotros", "nosotras", "nos", "ustedes", "les", "los", "las", "vosotros", "vosotras", "os"}:
+        if token.text.lower() in {"yo", "me", "mí", "tú", "te", "ti", "usted", "le", "lo", "la", "se", \
+                                  "él", "ella", "nosotros", "nosotras", "nos", "ustedes", "les", "los", \
+                                    "las", "vosotros", "vosotras", "os"}:
             pos = "PERSONAL_PRONOUN"
         else:
             pos = "PRONOUN"
@@ -179,8 +195,8 @@ def get_path(token):
             return [pos, mood, "SURFACE_FORM"]
         else:
             return [pos, number, mood, time, person, "SURFACE_FORM"]
-
-
+    else:
+        return [pos, "SURFACE_FORM"]
 
 def mutate(token, label_param, lemma_to_morph, nlp):
     '''
@@ -381,7 +397,7 @@ def apply_labels(doc, labels, lemma_to_morph, vocab, nlp):
             else:
                 corrected_sentence += " " + token.text
             
-            if re.match("^[\¿\¡]$", cur_token.text): # Handle beginning punctuation
+            if re.match("^[\¿\¡]$", token.text): # Handle beginning punctuation
                     no_space = True
     
     if corrected_sentence.endswith("EOS"): # Remove end token
