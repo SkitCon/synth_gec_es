@@ -22,7 +22,7 @@ DEFAULT_PATH_FOR_POS = {"NOUN": ["SING", "MASC", "SURFACE_FORM"],
                          "PERSONAL_PRONOUN": ["SING", "MASC", "NOM", "BASE", "NO", "SURFACE_FORM"],
                          "ARTICLE": ["SING", "MASC", "DEF", "SURFACE_FORM"],
                          "VERB": ["SING", "IND", "PRES", "3", "SURFACE_FORM"],
-                         "X": ["POS", "SURFACE_FORM"]}
+                         "X": ["X", "SURFACE_FORM"]}
 
 POS = ["NOUN", "PRONOUN", "PERSONAL_PRONOUN", "VERB", "ARTICLE", "ADJ", "ADV"]
 GENDERS = ["MASC", "FEM"] # No non-binary :( RAE dice que no
@@ -74,6 +74,7 @@ UPOS_TO_SIMPLE = {"ADJ": "ADJ",
                   "SCONJ": "X",
                   "SYM": "X",
                   "VERB": "VERB",
+                  "SPACE": "X",
                   "X": "X"}
 
 def load_vocab(filename):
@@ -164,6 +165,11 @@ def get_path(token):
     mood = token.morph.get("Mood")[0] if token.morph.get("Mood") else "Ind"
     verb_form = token.morph.get("VerbForm")[0] if token.morph.get("VerbForm") else "Fin"
     time = token.morph.get("Tense")[0] if token.morph.get("Tense") else "Pres"
+
+    # Handle disagreement over whether conditional is a mood or a tense, I define it as a tense
+    if mood == "Cnd":
+        mood = "Ind"
+        time = "Cnd"
     
     if verb_form == "Inf":
         mood = "INF"

@@ -1,0 +1,52 @@
+[
+    {
+        "name": "Any word swap",
+        "type": "swap",
+        "criteria": "^.*$",
+        "criteria_pos": [],
+        "output": [],
+        "weight": 1,
+        "match_morph": false,
+        "mutate_categories": []
+    },
+    {
+        "name": "Verb swap",
+        "type": "swap",
+        "criteria": "^.*$",
+        "criteria_pos": ["VERB"],
+        "output": [],
+        "weight": 1,
+        "match_morph": false,
+        "mutate_categories": []
+    },
+    {
+        "name": "Noun swap",
+        "type": "swap",
+        "criteria": "^.*$",
+        "criteria_pos": ["NOUN"],
+        "output": [],
+        "weight": 1,
+        "match_morph": false,
+        "mutate_categories": []
+    },
+    {
+        "name": "Noun and verb swap",
+        "type": "swap",
+        "criteria": "^.*$",
+        "criteria_pos": ["NOUN", "VERB"],
+        "output": [],
+        "weight": 1,
+        "match_morph": false,
+        "mutate_categories": []
+    },
+    {
+        "name": "Swap pronouns",
+        "type": "swap",
+        "criteria": "^.*$",
+        "criteria_pos": ["PRONOUN", "PERSONAL_PRONOUN"],
+        "output": [],
+        "weight": 1,
+        "match_morph": false,
+        "mutate_categories": []
+    }
+]

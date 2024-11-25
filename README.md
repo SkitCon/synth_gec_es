@@ -2,11 +2,14 @@
 [![en](https://img.shields.io/badge/lang-en-red.svg)](README.md)
 [![es](https://img.shields.io/badge/lang-es-yellow.svg)](README-es.md)
 
+**version 0.5.1**
+
 SYNTHetic Grammatical Error Correction for Spanish (ES) is a system for generating synthetic GEC data for common Spanish grammatical errors to train a GEC model.
 
 To be used to augment smaller high-quality training sets as in *GECToR – Grammatical Error Correction: Tag, Not Rewrite* (2020)
 
 **WORK IN PROGRESS**
+All scripts are working, but may still contain minor bugs. In general, if a script fails, an error message will print and it will continue with the rest of the file.
 
 Required libraries for all scripts:
 ```
@@ -31,32 +34,38 @@ unidecode == 1.3
 The main script is generate.py. This script can be ran as:
 
 ```
-python generate.py INPUT_FILE [OUTPUT_FILE] [-n/--num-sentences] [number to generate for each origin] [-s/--seq2seq]  [-t/--token] [-v/--verify]
+python generate.py INPUT_FILE OUTPUT_FILE ERROR_FILE_1 ERROR_FILE_2 ... ERROR_FILE_N [--min/-min_error] [-max/--max_error] [maximum number of errors in a sentence] [-d/--dict_file] [dictionary file] [--vocab_file] [vocab file] [--seed] [seed] [-n/--num-sentences] [number of sentences to generate for each original] [-t/--token] [--verify] [-v/--verbose]
 ```
 
 This script generates synthetic errorful sentences from well-formed Spanish sentences in a corpus.
 
 * input file is a path to a file with sentences in Spanish on each line. Note that this script assumes unlabeled data and that each line contains only one sentence.
 * output file is optional, defines the output path to place the generated data in. If no output path is supplied, it is placed in the same directory as the input file w/ the name [input file name]_synth.txt.
+* error files are json files with lists of errors to apply
+* min_error is the minimum number of errors to be generated for a sentence
+* max_error is the maximum number of errors to be generated for a sentence
+* --dict_file is the path to the dictionary file which supplies different morphological forms for a word
+* --vocab_file is the path to the vocab file containing all words in your model's vocabulary
+* --seed is the seed for random generation
 * --num-sentences is the number of errorful sentences that will be generated from each correct sentence in the supplied corpus. By default 1, but you can set it higher to generate more errorful sentences from one sentence with difference errors.
-* --seq2seq means the output synthetic data will include the raw errorful sentence unlabeled for use in a traditional NMT-based seq2seq GEC system (as with BART or T5)
 * --token means the output synthetic data will include token-level labels for the errorful sentence (discussed [below](#definitions)) for use in a token-level GEC system (as with GECToR)
 * --verify means the generated token labels will be verified using the decode algorithm to ensure that the result matches the correct sentence
+* --verbose means debugging code will print
 
 ### decode.py
 
 Ran as:
 
 ```
-python3 decode.py INPUT_FILE [OUTPUT_FILE] [-d/--dictionary-file] [dictionary file] [--vocab-file] [vocab file] [-v/--verify]
+python3 decode.py INPUT_FILE [OUTPUT_FILE] [-d/--dict_file] [dictionary file] [--vocab_file] [vocab file] [-v/--verify]
 ```
 
 This script takes errorful sentences + token-level labels and decodes them into a corrected sentence.
 
 * input file is a path to a file with a sentence on one line, the respective token-level labels on the next line, and a blank line before the next sentence
 * output file is optional, defines the output path to place the parsed sentences in. If no output path is supplied, it is placed in the same directory as the input file w/ the name [input file name]_parsed.txt.
-* --dictionary-file is the path to the dictionary file which supplies different morphological forms for a word
-* --vocab-file is the path to the vocab file containing all words in your model's vocabulary
+* --dict_file is the path to the dictionary file which supplies different morphological forms for a word
+* --vocab_file is the path to the vocab file containing all words in your model's vocabulary
 * --verify means the generated token labels will be verified using the decode algorithm to ensure that the result matches the correct sentence
 
 ### label.py
@@ -64,7 +73,7 @@ This script takes errorful sentences + token-level labels and decodes them into 
 Ran as:
 
 ```
-python3 label.py INPUT_FILE [OUTPUT_FILE] [-d/--dictionary-file] [dictionary file] [-v/--vocab-file] [vocab file]
+python3 label.py INPUT_FILE [OUTPUT_FILE] [-d/--dictionary-file] [dictionary file] [--vocab_file] [vocab file] [--verify] [-v/--verbose]
 ```
 
 This script takes errorful sentences + target sentences and translates them into token-level edits using shortest edit distance.
@@ -73,6 +82,8 @@ This script takes errorful sentences + target sentences and translates them into
 * output file is optional, defines the output path to place the labeled sentences in. If no output path is supplied, it is placed in the same directory as the input file w/ the name [input file name]_labeled.txt.
 * --dictionary-file is the path to the dictionary file which supplies different morphological forms for a word
 * --vocab-file is the path to the vocab file containing all words in your model's vocabulary
+* --verify means the generated token labels will be verified using the decode algorithm to ensure that the result matches the correct sentence
+* --verbose means debugging code will print
 
 ## Definitions
 
@@ -153,10 +164,11 @@ Note: Much more detail needed to be added for personal pronouns and the resoluti
   * PRES (PRESENTE)
   * PRET (PRETÉTERITO)
   * IMP (IMPERFECTO)
-  * CND (CONDICIONAL)
+  * CND[^2] (CONDICIONAL)
   * FUT (FUTURO)
 
   [^1]: Mutations which require adding extra words are deprecated. The functionality remains in decode.py, but these types of mutations will not result from automatically generated labels from generate.py or label.py.
+  [^2]: Note that the conditional is considered a tense. There is some disagreement over whether the conditional is a mood or a tense in Spanish, but I consider it a tense in my label schema.
 
 ## Token-Label Stacking
 You may have noticed that these labels are not mutually exclusive. Some labels are incompatible or redundant together, but many would be expected to operate in conjunction. Therefore, the textual label is formatted with tabs in between each token's label. If there is no tab between two labels, then all of those labels apply to the same token. For example:

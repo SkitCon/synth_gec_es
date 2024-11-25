@@ -1,0 +1,12 @@
+[
+    {
+        "name": "Replace anything",
+        "type": "replace",
+        "criteria": "^.*$",
+        "criteria_pos": [],
+        "output": [],
+        "weight": 1,
+        "match_morph": false,
+        "mutate_categories": []
+    }
+]

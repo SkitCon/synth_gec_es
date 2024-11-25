@@ -1,0 +1,12 @@
+[
+    {
+        "name": "Add anything",
+        "type": "add",
+        "criteria": "^.*$",
+        "criteria_pos": [],
+        "output": [],
+        "weight": 1,
+        "match_morph": false,
+        "mutate_categories": []
+    }
+]
