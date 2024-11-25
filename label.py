@@ -21,6 +21,7 @@ from pathlib import Path
 import numpy as np
 import spacy
 from bs4 import BeautifulSoup
+from transformers import BertTokenizer
 from unidecode import unidecode
 
 from utils.utils import load_morpho_dict, load_vocab, get_path, create_vocab_index, apply_labels, mutate, CONTEXT_WINDOW
@@ -266,7 +267,20 @@ def label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose=
                         else:
                             cur_labels[-1] += mutation_labels
             else:
-                cur_labels.append([f"<REPLACE param=\"{vocab_index[correct_doc[correct_idx].text]}\"/>"])
+                try:
+                    cur_labels.append([f"<REPLACE param=\"{vocab_index[correct_doc[correct_idx].text]}\"/>"])
+                except KeyError:
+                    # Do operation in parts
+                    tokenizer = BertTokenizer.from_pretrained("dccuchile/bert-base-spanish-wwm-cased")
+                    ids = tokenizer.encode(correct_doc[correct_idx].text)
+                    word_labels = []
+                    for i, id in enumerate(ids):
+                        if i == len(ids) - 1:
+                            word_labels.append(f"<REPLACE param=\"{id}\"/>")
+                        else:
+                            word_labels.append(f"<ADD param=\"{id}\"/>")
+                    word_labels.reverse()
+                    cur_labels.append(word_labels)
             labels.append(cur_labels)
             cur_labels = []
             op_idx += 1
@@ -308,7 +322,17 @@ def label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose=
                         else:
                             cur_labels[-1] += mutation_labels
             else:
-                cur_labels.append([f"<ADD param=\"{vocab_index[correct_doc[correct_idx].text]}\"/>"])
+                try:
+                    cur_labels.append([f"<ADD param=\"{vocab_index[correct_doc[correct_idx].text]}\"/>"])
+                except KeyError:
+                    # Do operation in parts
+                    tokenizer = BertTokenizer.from_pretrained("dccuchile/bert-base-spanish-wwm-cased")
+                    ids = tokenizer.encode(correct_doc[correct_idx].text)
+                    word_labels = []
+                    for id in ids:
+                        word_labels.append(f"<ADD param=\"{id}\"/>")
+                    word_labels.reverse()
+                    cur_labels.append(word_labels)
             op_idx += 1
             correct_idx += 1
      # Handle end of sequence
