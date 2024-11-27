@@ -16,15 +16,18 @@ Purpose: This script takes errorful sentences + target sentences and translates 
 '''
 
 import re
+import time
+import json
 import argparse
 from pathlib import Path
 import numpy as np
+import traceback
 import spacy
 from bs4 import BeautifulSoup
 from transformers import BertTokenizer
 from unidecode import unidecode
 
-from utils.utils import load_morpho_dict, load_vocab, get_path, create_vocab_index, apply_labels, mutate, CONTEXT_WINDOW
+from utils.utils import load_morpho_dict, load_vocab, get_path, get_new_path, create_vocab_index, apply_labels, mutate, CONTEXT_WINDOW, process_lemma, load_modified_nlp, restore_nlp, clean_text
 
 COST = {"KEEP": 0,
         "REPLACE": 1,
@@ -38,6 +41,14 @@ CATEGORIES = {"NOUN": ["NUMBER", "GENDER"],
               "PERSONAL_PRONOUN": ["NUMBER", "GENDER", "CASE", "PRONOUN_TYPE", "REFLEXIVE"],
               "ARTICLE": ["NUMBER", "GENDER", "DEFINITE"],
               "VERB": ["NUMBER", "MOOD", "TIME", "PERSON"]}
+
+def add_entry_to_morphology(surface_form, path, dict):
+    if len(path) == 0 or path[0] == "SURFACE_FORM":
+        dict["SURFACE_FORM"] = surface_form
+    else:
+        if not path[0] in dict:
+            dict[path[0]] = {}
+        add_entry_to_morphology(surface_form, path[1:], dict[path[0]])
 
 def generate_mutation_sequence(path):
     pos = path[0]
@@ -76,40 +87,40 @@ def link_with_mutation(errorful_token, correct_token):
 
     return final_sequence
 
-def verify_mutation(token, sentence, token_idx, labels, lemma_to_morph, nlp):
+def verify_mutation(token, sentence, token_idx, labels, lemma_to_morph, nlp, correct_token=None, silence_warnings=False):
     token = [token]
     for label in labels:
         if "MUTATE" in label:
-            left_context = []
-            for segment in sentence[max(0, token_idx - CONTEXT_WINDOW):token_idx]:
-                if not isinstance(segment, list):
-                    segment = [segment]
-                for cur_token in segment:
-                    left_context.append(cur_token)
-            right_context = []
-            for segment in sentence[token_idx+1:min(len(sentence), token_idx + CONTEXT_WINDOW + 1)]:
-                if not isinstance(segment, list):
-                    segment = [segment]
-                for cur_token in segment:
-                    right_context.append(cur_token)
-            with_context = left_context + token + right_context
-            all_strs = [str(token) for token in with_context]
-            new_segment_with_context = [token for token in nlp(' '.join(all_strs))]
-            token = new_segment_with_context[len(left_context):len(token) + len(left_context)]
+            
+            token = restore_nlp(sentence, token, token_idx, nlp)
             if not isinstance(token, list):
                 token = [token]
 
             param = BeautifulSoup(label, features="html.parser").find_all(True)[0].get("param", "").upper()
-            token = [mutate(token[0], param, lemma_to_morph, nlp)]
+            try:
+                token = [mutate(token[0], param, lemma_to_morph, nlp)]
+            except KeyError:
+                if correct_token:
+                    # Add entry to dict
+                    new_path = [process_lemma(token[0].lemma_)] + get_new_path(correct_token, param)
+                    if not silence_warnings:
+                        print(f"Adding {correct_token.text} to dict at {new_path}")
+                    add_entry_to_morphology(correct_token.text, new_path, lemma_to_morph)
+                    # Try again
+                    token = [mutate(token[0], param, lemma_to_morph, nlp)]
+                else:
+                    # If no correct token, 
+                    raise KeyError
     return token[0]
 
-def label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose=False):
+def label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose=False, silence_warnings=False):
 
     errorful_doc = nlp(errorful)
     correct_doc = nlp(correct)
 
     if verbose:
         print(f"=================================\nTesting labels for:\n{errorful}\nto\n{correct}")
+        print(f"Tokenization:\n\tErrorful: {errorful_doc}\n\tCorrect: {correct_doc}")
 
     dp = np.zeros((len(errorful_doc)+1, len(correct_doc)+1))
 
@@ -167,7 +178,7 @@ def label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose=
         print(f"Basic operations: {operations}")
 
     # Put all lemmas and tokens in a set to easily check if COPY or COPY+MUTATE is possible
-    token_lemmas = {unidecode(token.lemma_) for token in errorful_doc}
+    token_lemmas = {process_lemma(token.lemma_) for token in errorful_doc}
     tokens = {token.text for token in errorful_doc}
 
     # Translate basic operations to complex token labels
@@ -209,14 +220,15 @@ def label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose=
             op_idx += 1
             errorful_idx += 1
         elif operation == "REPLACE":
-            if unidecode(errorful_doc[errorful_idx].lemma_) == unidecode(correct_doc[correct_idx].lemma_): # Can mutate
+            if process_lemma(errorful_doc[errorful_idx].lemma_) == process_lemma(correct_doc[correct_idx].lemma_): # Can mutate
                 mutation_labels = link_with_mutation(errorful_doc[errorful_idx], correct_doc[correct_idx])
                 
                 # Verify mutation
                 failed_to_resolve = True
                 key_error = False
                 try:
-                    mutated_token = verify_mutation(errorful_doc[errorful_idx], [token for token in errorful_doc], errorful_idx, mutation_labels, lemma_to_morph, nlp)
+                    mutated_token = verify_mutation(errorful_doc[errorful_idx], [token for token in errorful_doc], errorful_idx, mutation_labels,
+                                                    lemma_to_morph, nlp, correct_token=correct_doc[correct_idx], silence_warnings=silence_warnings)
                     if str(mutated_token) == correct_doc[correct_idx].text:
                         failed_to_resolve = False
                 except KeyError as e:
@@ -224,22 +236,23 @@ def label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose=
                     error = e
 
                 if failed_to_resolve:
-                    if key_error:
+                    if key_error and not silence_warnings:
                         print(f"Failed to resolve generated mutation for {errorful_doc[errorful_idx]} to {correct_doc[correct_idx]} due to KeyError: {error}")
-                    else:
+                    elif not silence_warnings:
                         print(f"Failed to resolve generated mutation for {errorful_doc[errorful_idx]} to {correct_doc[correct_idx]} due to incorrect mutation\nResult of Mutation: {mutated_token}")
                     print(f"Mutation: {mutation_labels}\nDefaulting to REPLACE (not preferred)")
                     cur_labels.append([f"<REPLACE param=\"{vocab_index[correct_doc[correct_idx].text]}\"/>"])
                 else:
                     cur_labels.append(mutation_labels)
-            elif unidecode(correct_doc[correct_idx].lemma_) in token_lemmas: # Can copy
+            elif process_lemma(correct_doc[correct_idx].lemma_) in token_lemmas: # Can copy
                 param = -1
                 for i, token in enumerate(errorful_doc):
-                    if token.lemma_ == unidecode(correct_doc[correct_idx].lemma_):
+                    if token.lemma_ == process_lemma(correct_doc[correct_idx].lemma_):
                         param = i
                         break
                 if param == -1:
-                    print(f"COPY-REPLACE FAILED!\n\tThought {correct_doc[correct_idx].lemma_} was in {errorful_doc}.\n\tUsing normal replace (not preferred)")
+                    if not silence_warnings:
+                        print(f"COPY-REPLACE FAILED!\n\tThought {correct_doc[correct_idx].lemma_} was in {errorful_doc}.\n\tUsing normal replace (not preferred)")
                     cur_labels.append([f"<REPLACE param=\"{vocab_index[correct_doc[correct_idx].text]}\"/>"])
                 else:
                     cur_labels.append([f"<COPY-REPLACE param=\"{param}\"/>"])
@@ -250,7 +263,8 @@ def label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose=
                         failed_to_resolve = True
                         key_error = False
                         try:
-                            mutated_token = verify_mutation(errorful_doc[param], [token for token in errorful_doc], errorful_idx, mutation_labels, lemma_to_morph, nlp)
+                            mutated_token = verify_mutation(errorful_doc[param], [token for token in errorful_doc], errorful_idx, mutation_labels,
+                                                            lemma_to_morph, nlp, correct_token=correct_doc[correct_idx], silence_warnings=silence_warnings)
                             if str(mutated_token) == correct_doc[correct_idx].text:
                                 failed_to_resolve = False
                         except KeyError as e:
@@ -258,9 +272,9 @@ def label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose=
                             error = e
 
                         if failed_to_resolve:
-                            if key_error:
+                            if key_error and not silence_warnings:
                                 print(f"Failed to resolve generated mutation for {errorful_doc[param]} to {correct_doc[correct_idx]} due to KeyError: {error}")
-                            else:
+                            elif not silence_warnings:
                                 print(f"Failed to resolve generated mutation for {errorful_doc[param]} to {correct_doc[correct_idx]} due to incorrect mutation\nResult of Mutation: {mutated_token}")
                             print(f"Mutation: {mutation_labels}\nDefaulting to REPLACE (not preferred)")
                             cur_labels[-1] = [f"<REPLACE param=\"{vocab_index[correct_doc[correct_idx].text]}\"/>"]
@@ -287,14 +301,15 @@ def label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose=
             errorful_idx += 1
             correct_idx += 1
         elif operation == "ADD":
-            if unidecode(correct_doc[correct_idx].lemma_) in token_lemmas: # Can copy
+            if process_lemma(correct_doc[correct_idx].lemma_) in token_lemmas: # Can copy
                 param = -1
                 for i, token in enumerate(errorful_doc):
-                    if unidecode(token.lemma_) == unidecode(correct_doc[correct_idx].lemma_):
+                    if process_lemma(token.lemma_) == process_lemma(correct_doc[correct_idx].lemma_):
                         param = i
                         break
                 if param == -1:
-                    print(f"COPY-ADD FAILED!\n\tThought {correct_doc[correct_idx].lemma_} was in {errorful_doc}.\n\tUsing normal replace (not preferred)")
+                    if not silence_warnings:
+                        print(f"COPY-ADD FAILED!\n\tThought {correct_doc[correct_idx].lemma_} was in {errorful_doc}.\n\tUsing normal replace (not preferred)")
                     cur_labels.append([f"<ADD param=\"{vocab_index[correct_doc[correct_idx].text]}\"/>"])
                 else:
                     cur_labels.append([f"<COPY-ADD param=\"{param}\"/>"])
@@ -305,7 +320,8 @@ def label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose=
                         failed_to_resolve = True
                         key_error = False
                         try:
-                            mutated_token = verify_mutation(errorful_doc[param], [token for token in errorful_doc], errorful_idx, mutation_labels, lemma_to_morph, nlp)
+                            mutated_token = verify_mutation(errorful_doc[param], [token for token in errorful_doc], errorful_idx, mutation_labels,
+                                                            lemma_to_morph, nlp, correct_token=correct_doc[correct_idx], silence_warnings=silence_warnings)
                             if str(mutated_token) == correct_doc[correct_idx].text:
                                 failed_to_resolve = False
                         except KeyError as e:
@@ -313,9 +329,9 @@ def label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose=
                             error = e
 
                         if failed_to_resolve:
-                            if key_error:
+                            if key_error and not silence_warnings:
                                 print(f"Failed to resolve generated mutation for {errorful_doc[param]} to {correct_doc[correct_idx]} due to KeyError: {error}")
-                            else:
+                            elif not silence_warnings:
                                 print(f"Failed to resolve generated mutation for {errorful_doc[param]} to {correct_doc[correct_idx]} due to incorrect mutation\nResult of Mutation: {mutated_token}")
                             print(f"Mutation: {mutation_labels}\nDefaulting to ADD (not preferred)")
                             cur_labels[-1] = [f"<ADD param=\"{vocab_index[correct_doc[correct_idx].text]}\"/>"]
@@ -370,25 +386,32 @@ def label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose=
     labels = '\t'.join([' '.join(cur_labels) for cur_labels in labels])
     return labels
 
-def main(input_file, output_file, lemma_to_morph, vocab, verify=False, verbose=False):
+def main(input_file, output_file, lemma_to_morph, vocab, verify=False, verbose=False, silence_warnings=False):
 
-    nlp = spacy.load("es_dep_news_trf")
+    nlp = load_modified_nlp()
     vocab_index = create_vocab_index(vocab)
 
+    start_time = time.time()
     failed_labels = 0
     with open(input_file, 'r') as f:
         lines = f.readlines()
-        sentence_pairs = [(lines[i], lines[i+1]) for i in range(0, len(lines), 3)]
+        sentence_pairs = [(clean_text(lines[i]), clean_text(lines[i+1])) for i in range(0, len(lines), 3)]
 
         labels = []
-        for sentences in sentence_pairs:
+        for i, sentences in enumerate(sentence_pairs):
+            if i in list(range(100, len(sentence_pairs), 100)):
+                cur_time = time.time()
+                print(f"===================================\nProgress Report:\n{round(i / len(sentence_pairs) * 100, 1)}% done.\nFailed to generate labels for {failed_labels} sentences out of {i}.\nAverage time to label one sentence: {round((cur_time - start_time) / i, 3)} seconds")
             try:
-                cur_labels = label_sentence(sentences[0], sentences[1], lemma_to_morph, vocab_index, nlp, verbose=verbose)
+                cur_labels = label_sentence(sentences[0], sentences[1], lemma_to_morph, vocab_index, nlp, verbose=verbose, silence_warnings=silence_warnings)
                 labels.append(cur_labels)
             except Exception as e:
-                print(f"Failed to generate labels due to {e}\n\tErrorful sentence: {sentences[0]}\n\tCorrect sentence: {sentences[1]}")
+                if not silence_warnings:
+                    print(f"Failed to generate labels due to {e}\n\tErrorful sentence: {sentences[0]}\n\tCorrect sentence: {sentences[1]}")
+                    print(traceback.format_exc())
                 failed_labels += 1
 
+    start_time = time.time()
     successful_labels = 0
     with open(output_file, 'w') as f:
         for i in range(len(sentence_pairs)):
@@ -397,33 +420,56 @@ def main(input_file, output_file, lemma_to_morph, vocab, verify=False, verbose=F
             token_labels = labels[i]
 
             if verify:
-                for i in range(len(sentence_pairs)):
-                    errorful_sentence = sentence_pairs[i][0]
-                    correct_sentence = sentence_pairs[i][1]
-                    token_labels = labels[i]
-
-                    decoded_sentence = apply_labels(nlp(errorful_sentence), token_labels.split('\t'), lemma_to_morph, vocab, nlp)
-                    if decoded_sentence != correct_sentence:
+                if i in list(range(100, len(sentence_pairs), 100)):
+                    cur_time = time.time()
+                    print(f"===================================\nProgress Report on Verification:\n{round(i / len(sentence_pairs) * 100, 1)}% done.\n{failed_labels} sentences failed verification out of {i}.\nAverage time to verify one sentence: {round((cur_time - start_time) / i, 3)} seconds")
+                try:
+                    tokenized_errorful_sentence = nlp(errorful_sentence)
+                    if verbose:
+                        print(f"=================================\nVerifying sentence: {errorful_sentence}\nTokenization: {tokenized_errorful_sentence}")
+                    decoded_sentence = apply_labels(tokenized_errorful_sentence, token_labels.split('\t'), lemma_to_morph, vocab, nlp)
+                except KeyError as e:
+                    if not silence_warnings:
+                        print(f"VERIFY FAILED!!!\n\tCaused by KeyError: {e}\n\tReport:\n\tErrorful Sentence:{errorful_sentence}\n\tGenerated Labels:{token_labels}\n\tTarget:{correct_sentence}")
+                    failed_labels += 1
+                    continue
+                except IndexError as e:
+                    if not silence_warnings:
+                        print(f"VERIFY FAILED!!!\n\tCaused by IndexError: {e}\n\tReport:\n\tErrorful Sentence:{errorful_sentence}\n\tGenerated Labels:{token_labels}\n\tTarget:{correct_sentence}")
+                        print(traceback.format_exc())
+                    failed_labels += 1
+                    continue
+                if decoded_sentence != correct_sentence:
+                    if not silence_warnings:
                         print(f"VERIFY FAILED!\nReport:\n\tErrorful Sentence:{errorful_sentence}\n\tGenerated Labels:{token_labels}\n\tTarget:{correct_sentence}\n\tResult from Decode:{decoded_sentence}")
-                        failed_labels += 1
-                        continue
+                    failed_labels += 1
+                    continue
             
             f.write(f"{errorful_sentence}\n{token_labels}\n{correct_sentence}\n\n")
             successful_labels += 1
     print(f"Failed to label {failed_labels} sentences.")
     print(f"Successfully labeled {successful_labels} sentences")
 
+    new_dict_path = "land_def/morpho_dict_updated.json"
+    if verbose:
+        print(f"Exporting updated morphology dictionary to {new_dict_path}")
+    with open(new_dict_path, 'w') as f:
+        json.dump(lemma_to_morph, f)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("input_file", help="path to a file with sentences in Spanish on each line")
     parser.add_argument("output_file", help="output path")
-    parser.add_argument("--dict_file", default="lang_def/morpho_dict.json", help="path to the dictionary file which supplies different morphological forms for a word")
+    parser.add_argument("--dict_file", default="lang_def/morpho_dict_updated.json", help="path to the dictionary file which supplies different morphological forms for a word")
     parser.add_argument("--vocab_file", default="lang_def/vocab.txt", help="path to the vocab file containing all words in your model's vocabulary")
     parser.add_argument("--verify",
                         help="generated token labels will be verified as correct by running the decode algorithm",
                         action="store_true")
     parser.add_argument("-v", "--verbose",
                         help="Print debugging statements",
+                        action="store_true")
+    parser.add_argument("-sw", "--silence_warnings",
+                        help="Silence warnings",
                         action="store_true")
 
     args = parser.parse_args()
@@ -434,4 +480,4 @@ if __name__ == "__main__":
     else:
         output_file = args.output_file
 
-    main(args.input_file, output_file, load_morpho_dict(args.dict_file), load_vocab(args.vocab_file), verify=args.verify, verbose=args.verbose)
+    main(args.input_file, output_file, load_morpho_dict(args.dict_file), load_vocab(args.vocab_file), verify=args.verify, verbose=args.verbose, silence_warnings=args.silence_warnings)

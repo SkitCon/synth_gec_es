@@ -2,20 +2,21 @@
 [![en](https://img.shields.io/badge/lang-en-red.svg)](README.md)
 [![es](https://img.shields.io/badge/lang-es-yellow.svg)](README-es.md)
 
-**version 0.5.1**
+**version 0.5.2**
 
 SYNTHetic Grammatical Error Correction for Spanish (ES) is a system for generating synthetic GEC data for common Spanish grammatical errors to train a GEC model.
 
 To be used to augment smaller high-quality training sets as in *GECToR – Grammatical Error Correction: Tag, Not Rewrite* (2020)
 
 **WORK IN PROGRESS**
-All scripts are working, but may still contain minor bugs. In general, if a script fails, an error message will print and it will continue with the rest of the file.
+All scripts are working, but may still contain minor bugs. In general, if a script fails, an error message will print and it will continue with the rest of the file, ignoring that sentence.
 
 Required libraries for all scripts:
 ```
 bs4 == 0.0.2
 spacy == 3.7.6
 unidecode == 1.3
+transformers == 4.31.0
 ```
 
 ## Table of Contents
@@ -34,12 +35,12 @@ unidecode == 1.3
 The main script is generate.py. This script can be ran as:
 
 ```
-python generate.py INPUT_FILE OUTPUT_FILE ERROR_FILE_1 ERROR_FILE_2 ... ERROR_FILE_N [--min/-min_error] [-max/--max_error] [maximum number of errors in a sentence] [-d/--dict_file] [dictionary file] [--vocab_file] [vocab file] [--seed] [seed] [-n/--num-sentences] [number of sentences to generate for each original] [-t/--token] [--verify] [-v/--verbose]
+python generate.py INPUT_FILE OUTPUT_FILE ERROR_FILE_1 ERROR_FILE_2 ... ERROR_FILE_N [--min/-min_error] [minimum number of errors in a sentence] [-max/--max_error] [maximum number of errors in a sentence] [-d/--dict_file] [dictionary file] [--vocab_file] [vocab file] [--seed] [seed] [-n/--num-sentences] [number of sentences to generate for each original] [-t/--token] [--verify] [-v/--verbose] [-sw/--silence_warnings]
 ```
 
 This script generates synthetic errorful sentences from well-formed Spanish sentences in a corpus.
 
-* input file is a path to a file with sentences in Spanish on each line. Note that this script assumes unlabeled data and that each line contains only one sentence.
+* input file is a path to a file with one sentence in Spanish on a line with a blank line in between each sentence. Note that this script assumes unlabeled data and that each line contains only one sentence.
 * output file is optional, defines the output path to place the generated data in. If no output path is supplied, it is placed in the same directory as the input file w/ the name [input file name]_synth.txt.
 * error files are json files with lists of errors to apply
 * min_error is the minimum number of errors to be generated for a sentence
@@ -49,15 +50,16 @@ This script generates synthetic errorful sentences from well-formed Spanish sent
 * --seed is the seed for random generation
 * --num-sentences is the number of errorful sentences that will be generated from each correct sentence in the supplied corpus. By default 1, but you can set it higher to generate more errorful sentences from one sentence with difference errors.
 * --token means the output synthetic data will include token-level labels for the errorful sentence (discussed [below](#definitions)) for use in a token-level GEC system (as with GECToR)
-* --verify means the generated token labels will be verified using the decode algorithm to ensure that the result matches the correct sentence
+* --verify means the generated token labels will be verified using the decode algorithm to ensure that the result matches the correct sentence. Note that this will generally double the time to label, but guarantees that the labels are valid
 * --verbose means debugging code will print
+* --silence_warnings means warnings will not be printed, such as a mutation being replaced by a replace
 
 ### decode.py
 
 Ran as:
 
 ```
-python3 decode.py INPUT_FILE [OUTPUT_FILE] [-d/--dict_file] [dictionary file] [--vocab_file] [vocab file] [-v/--verify]
+python3 decode.py INPUT_FILE [OUTPUT_FILE] [-d/--dict_file] [dictionary file] [--vocab_file] [vocab file] [-sw/--silence_warnings]
 ```
 
 This script takes errorful sentences + token-level labels and decodes them into a corrected sentence.
@@ -66,14 +68,14 @@ This script takes errorful sentences + token-level labels and decodes them into 
 * output file is optional, defines the output path to place the parsed sentences in. If no output path is supplied, it is placed in the same directory as the input file w/ the name [input file name]_parsed.txt.
 * --dict_file is the path to the dictionary file which supplies different morphological forms for a word
 * --vocab_file is the path to the vocab file containing all words in your model's vocabulary
-* --verify means the generated token labels will be verified using the decode algorithm to ensure that the result matches the correct sentence
+* --silence_warnings means warnings will not be printed, such as a mutation being replaced by a replace
 
 ### label.py
 
 Ran as:
 
 ```
-python3 label.py INPUT_FILE [OUTPUT_FILE] [-d/--dictionary-file] [dictionary file] [--vocab_file] [vocab file] [--verify] [-v/--verbose]
+python3 label.py INPUT_FILE [OUTPUT_FILE] [-d/--dictionary-file] [dictionary file] [--vocab_file] [vocab file] [--verify] [-v/--verbose] [-sw/--silence_warnings]
 ```
 
 This script takes errorful sentences + target sentences and translates them into token-level edits using shortest edit distance.
@@ -82,8 +84,9 @@ This script takes errorful sentences + target sentences and translates them into
 * output file is optional, defines the output path to place the labeled sentences in. If no output path is supplied, it is placed in the same directory as the input file w/ the name [input file name]_labeled.txt.
 * --dictionary-file is the path to the dictionary file which supplies different morphological forms for a word
 * --vocab-file is the path to the vocab file containing all words in your model's vocabulary
-* --verify means the generated token labels will be verified using the decode algorithm to ensure that the result matches the correct sentence
+* --verify means the generated token labels will be verified using the decode algorithm to ensure that the result matches the correct sentence. Note that this will generally double the time to label, but guarantees that the labels are valid
 * --verbose means debugging code will print
+* --silence_warnings means warnings will not be printed, such as a mutation being replaced by a replace
 
 ## Definitions
 

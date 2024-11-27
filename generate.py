@@ -12,7 +12,7 @@ import traceback
 from pathlib import Path
 import spacy
 
-from utils.utils import load_morpho_dict, load_vocab, create_vocab_index, get_path, follow_path, apply_labels, mutate
+from utils.utils import load_morpho_dict, load_vocab, create_vocab_index, get_path, follow_path, apply_labels, mutate, clean_text
 from label import label_sentence
 
 from utils.utils import UPOS_TO_SIMPLE, AVAILABLE_TYPES, HIERARCHY_DEF, DEFAULT_PATH_FOR_POS
@@ -179,7 +179,7 @@ def apply_error(error, sentence, lemma_to_morph, vocab, nlp, verbose=False):
 
                     cur_path = get_path(token)
                     if len(cur_path) == 3 and UPOS_TO_SIMPLE[token.pos_] == "VERB": # Special verb
-                        cur_path = ["VERB"] + DEFAULT_PATH_FOR_POS["VERB"]
+                        cur_path = DEFAULT_PATH_FOR_POS["VERB"]
                     index_of_change = HIERARCHY_DEF[label_param.split('-')[0]]
                     if isinstance(index_of_change, list): # Special case for verbs when changing mood
                         if cur_path[2] == "SURFACE_FORM": # Special verb case
@@ -270,7 +270,7 @@ def apply_error(error, sentence, lemma_to_morph, vocab, nlp, verbose=False):
 def generate_errorful_sentences(input_file, output_file, errors,
                                 lemma_to_morph, vocab,
                                 min_error=0, max_error=3, num_sentences=1,
-                                include_token_labels=True, verify=False, verbose=False):
+                                include_token_labels=True, verify=False, verbose=False, silence_warnings=False):
     '''
     '''
     nlp = spacy.load("es_dep_news_trf")
@@ -284,7 +284,7 @@ def generate_errorful_sentences(input_file, output_file, errors,
         for line in f:
             if re.sub(r"\s", '', line) == "": # Empty line
                 continue
-            sentence = nlp(line.strip())
+            sentence = nlp(clean_text(line))
             if verbose:
                 print(f"=========================\nBeginning error generation for sentence: {sentence}")
             for _ in range(num_sentences):
@@ -310,20 +310,23 @@ def generate_errorful_sentences(input_file, output_file, errors,
                 try:
                     token_labels = label_sentence(sentence[0], sentence[1], lemma_to_morph, vocab_index, nlp, verbose=verbose)
                 except Exception as e:
-                    print(f"LABEL GENERATION FAILED!\n\t{e} while generating sentence. Not including sentence in output file.")
-                    print(traceback.format_exc())
+                    if not silence_warnings:
+                        print(f"LABEL GENERATION FAILED!\n\t{e} while generating sentence. Not including sentence in output file.")
+                        print(traceback.format_exc())
                     excluded_sentences += 1
                     continue
                 if verify:
                     try:
                         decoded_sentence = apply_labels(nlp(sentence[0]), token_labels.split('\t'), lemma_to_morph, vocab, nlp)
                     except Exception as e:
-                        print(f"VERIFY FAILED!\n\t{e} while decoding sentence. Not including sentence in output file.")
-                        print(traceback.format_exc())
+                        if not silence_warnings:
+                            print(f"VERIFY FAILED!\n\t{e} while decoding sentence. Not including sentence in output file.")
+                            print(traceback.format_exc())
                         excluded_sentences += 1
                         continue
                     if decoded_sentence != sentence[1]:
-                        print(f"VERIFY FAILED!\nReport:\n\tErrorful Sentence: {sentence[0]}\n\tGenerated Labels: {token_labels}\n\tTarget: {sentence[1]}\n\tResult from Decode: {decoded_sentence}")
+                        if not silence_warnings:
+                            print(f"VERIFY FAILED!\nReport:\n\tErrorful Sentence: {sentence[0]}\n\tGenerated Labels: {token_labels}\n\tTarget: {sentence[1]}\n\tResult from Decode: {decoded_sentence}")
                         excluded_sentences += 1
                         continue
             f.write(sentence[0] + '\n')
@@ -342,7 +345,7 @@ if __name__ == "__main__":
     parser.add_argument("-min", "--min_error", default=0, type=int, help="The minimum number of errors that can be generated in a sentence. By default 0")
     parser.add_argument("-max", "--max_error", default=3, type=int, help="The maximum number of errors that can be generated in a sentence. By default 3")
 
-    parser.add_argument("--dict_file", default="lang_def/morpho_dict.json", help="path to the dictionary file which supplies different morphological forms for a word")
+    parser.add_argument("--dict_file", default="lang_def/morpho_dict_updated.json", help="path to the dictionary file which supplies different morphological forms for a word")
     parser.add_argument("--vocab_file", default="lang_def/vocab.txt", help="path to the vocab file containing all words in your model's vocabulary")
 
     parser.add_argument("--seed", default=42, type=int, help="Seed for random error generation")
@@ -356,6 +359,9 @@ if __name__ == "__main__":
                         action="store_true")
     parser.add_argument("-v", "--verbose",
                         help="Print debugging statements",
+                        action="store_true")
+    parser.add_argument("-sw", "--silence_warnings",
+                        help="Silence warnings",
                         action="store_true")
 
     args = parser.parse_args()
@@ -374,4 +380,4 @@ if __name__ == "__main__":
     generate_errorful_sentences(input_file, output_file, errors,
                                 load_morpho_dict(args.dict_file), load_vocab(args.vocab_file),
                                 min_error=args.min_error, max_error=args.max_error, num_sentences=args.num_sentences,
-                                include_token_labels=args.token, verify=args.verify, verbose=args.verbose)
+                                include_token_labels=args.token, verify=args.verify, verbose=args.verbose, silence_warnings=args.silence_warnings)

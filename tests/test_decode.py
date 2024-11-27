@@ -9,7 +9,7 @@ sys.path.append("..")
 import unittest
 import spacy
 
-from utils.utils import load_vocab, load_morpho_dict, apply_labels
+from utils.utils import load_vocab, load_morpho_dict, apply_labels, load_modified_nlp
 
 BASE_TESTS = [("Voy al tienda.",
                "Voy a la tienda.",
@@ -59,7 +59,7 @@ COPY_TESTS = [("Almorzar quiero.",
 
 class TestApply(unittest.TestCase):
     def setUp(self):
-        self.nlp = spacy.load("es_dep_news_trf")
+        self.nlp = load_modified_nlp()
         self.vocab = load_vocab("../lang_def/vocab.txt")
         self.lemma_to_morph = load_morpho_dict("../lang_def/morpho_dict.json")
 

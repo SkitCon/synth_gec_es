@@ -8,6 +8,8 @@ import json
 import re
 from bs4 import BeautifulSoup
 import spacy
+from spacy.tokens import Doc
+from transformers import AutoTokenizer
 from unidecode import unidecode
 
 from utils.custom_errors import InvalidLabelException
@@ -15,13 +17,13 @@ from utils.custom_errors import NotInDictionaryException
 
 CONTEXT_WINDOW = 1 # Context window for spacy analysis of edited tokens
 
-DEFAULT_PATH_FOR_POS = {"NOUN": ["SING", "MASC", "SURFACE_FORM"],
-                         "ADJ": ["SING", "MASC", "SURFACE_FORM"],
-                         "ADV": ["SING", "MASC", "SURFACE_FORM"],
-                         "PRONOUN": ["SING", "MASC", "NOM", "SURFACE_FORM"],
-                         "PERSONAL_PRONOUN": ["SING", "MASC", "NOM", "BASE", "NO", "SURFACE_FORM"],
-                         "ARTICLE": ["SING", "MASC", "DEF", "SURFACE_FORM"],
-                         "VERB": ["SING", "IND", "PRES", "3", "SURFACE_FORM"],
+DEFAULT_PATH_FOR_POS = {"NOUN": ["NOUN", "SING", "MASC", "SURFACE_FORM"],
+                         "ADJ": ["ADJ", "SING", "MASC", "SURFACE_FORM"],
+                         "ADV": ["ADV", "SING", "MASC", "SURFACE_FORM"],
+                         "PRONOUN": ["PRONOUN", "SING", "MASC", "NOM", "SURFACE_FORM"],
+                         "PERSONAL_PRONOUN": ["PERSONAL_PRONOUN", "SING", "MASC", "NOM", "BASE", "NO", "SURFACE_FORM"],
+                         "ARTICLE": ["ARTICLE", "SING", "MASC", "DEF", "SURFACE_FORM"],
+                         "VERB": ["VERB", "SING", "IND", "PRES", "3", "SURFACE_FORM"],
                          "X": ["X", "SURFACE_FORM"]}
 
 POS = ["NOUN", "PRONOUN", "PERSONAL_PRONOUN", "VERB", "ARTICLE", "ADJ", "ADV"]
@@ -34,6 +36,15 @@ TIMES = ["PRES", "PRET", "IMP", "CND", "FUT"]
 PERSONS = ["1", "2", "3"]
 PRONOUN_TYPES = ["BASE", "CLITIC"]
 REFLEXIVE = ["YES", "NO"]
+
+CATEGORIES_FOR_POS = {"NOUN": ["POS", "NUMBER", "GENDER"],
+                      "ADJ": ["POS", "NUMBER", "GENDER"],
+                      "ADV": ["POS", "NUMBER", "GENDER"],
+                      "PRONOUN": ["POS", "NUMBER", "GENDER", "CASE"],
+                      "PERSONAL_PRONOUN": ["POS", "NUMBER", "GENDER", "CASE", "PRONOUN_TYPE", "REFLEXIVE"],
+                      "ARTICLE": ["POS", "NUMBER", "GENDER", "DEFINITE"],
+                      "VERB": ["POS", "NUMBER", "MOOD", "TIME", "PERSON"],
+                      "X": ["POS"]}
 
 AVAILABLE_TYPES = {"POS": POS,
                    "GENDER": GENDERS,
@@ -97,6 +108,31 @@ def load_morpho_dict(filename):
 def create_vocab_index(vocab):
     return {word: i for i, word in enumerate(vocab)}
 
+def load_modified_nlp(model_path="es_dep_news_trf", tokenizer_path="dccuchile/bert-base-spanish-wwm-cased"):
+    nlp = spacy.load(model_path)
+    custom_tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    nlp.tokenizer = lambda text: Doc(nlp.vocab, words=custom_tokenizer.tokenize(text))
+    return nlp
+
+def clean_text(text):
+    text = re.sub("\s+", ' ', text).strip()
+    replacements = [(r"[“”]", "\""), \
+                    (r"[‘’]", "'"), \
+                    (r"…", "..."), \
+                    (r"[\"\']", '')] # This one is for my sanity. Let's pretend quotes don't exist :)
+    for replacement in replacements:
+        text = re.sub(replacement[0], replacement[1], text)
+    return text.strip()
+
+def process_lemma(raw_lemma):
+    '''
+    To solve weird lemmatization problem where something like "empezábamos" has the lemma: "empezár"
+    '''
+    if raw_lemma.endswith('r'):
+        return raw_lemma[:-2] + unidecode(raw_lemma[-2]) + raw_lemma[-1]
+    else:
+        return raw_lemma
+
 def follow_path(dictionary, path):
     '''
     Simple helper function for a hierarchical dict. Recursively follow the given path into the
@@ -117,7 +153,7 @@ def follow_path(dictionary, path):
             return dictionary["SURFACE_FORM"]
         elif path[0] in POS:
             new_dict = dictionary[path[0]]
-            path = DEFAULT_PATH_FOR_POS[path[0]]
+            path = DEFAULT_PATH_FOR_POS[path[0]][1:]
             return follow_path(new_dict, path)
         else: # Too deep to resolve, go back up
             raise KeyError
@@ -204,6 +240,79 @@ def get_path(token):
     else:
         return [pos, "SURFACE_FORM"]
 
+def get_new_path(token, label_param):
+    cur_path = get_path(token)
+
+    # Ensure param is compatible with POS
+    category_to_change = label_param.split('-')[0]
+    if not category_to_change in CATEGORIES_FOR_POS[cur_path[0]]: # Mismatch, need to repair path
+        new_pos = None
+        new_cur_path = None
+        for pos, categories in CATEGORIES_FOR_POS.items():
+            if category_to_change in categories:
+                new_pos = pos
+                new_cur_path = DEFAULT_PATH_FOR_POS[pos]
+                break
+        if not new_cur_path:
+            raise InvalidLabelException(f"Mutation \"{label_param}\" does not exist.")
+        # Transfer what is possible
+        overlap = [i for i in range(1, min(len(CATEGORIES_FOR_POS[cur_path[0]]), len(CATEGORIES_FOR_POS[new_pos])))
+                   if CATEGORIES_FOR_POS[cur_path[0]][i] == CATEGORIES_FOR_POS[new_pos][i]]
+        for i in overlap:
+            new_cur_path[i] = cur_path[i]
+        cur_path = new_cur_path
+
+    # Going from special verb to normal verb, apply default path
+    if cur_path[0] == "VERB" and len(cur_path) == 3 and not label_param in ["MOOD-INF", "MOOD-GER", "MOOD-PAST-PART"]:
+        cur_path = DEFAULT_PATH_FOR_POS["VERB"]
+    
+    new_path = cur_path.copy()
+    index_of_change = HIERARCHY_DEF[label_param.split('-')[0]]
+    if isinstance(index_of_change, list): # Special case for verbs when changing mood
+        if new_path[2] == "SURFACE_FORM": # Special verb case
+            index_of_change = 1
+        else: # Normal verb case
+            index_of_change = 2
+    
+    # Going from normal verb to special verb, eliminate extra categories
+    if label_param in ["MOOD-INF", "MOOD-GER", "MOOD-PAST-PART"]:
+        new_path = ["VERB", '-'.join(label_param.split('-')[1:]), "SURFACE_FORM"]
+    else:
+        new_path[index_of_change] = '-'.join(label_param.split('-')[1:])
+    
+    return new_path
+
+def restore_nlp(sentence, token, token_idx, nlp):
+    left_context = []
+    for segment in sentence[max(0, token_idx - CONTEXT_WINDOW):token_idx]:
+        if not isinstance(segment, list):
+            segment = [segment]
+        for cur_token in segment:
+            left_context.append(cur_token)
+    # Find main word for any sub-words
+    cur_left_start = max(0, token_idx - CONTEXT_WINDOW) - 1
+    while cur_left_start >= 0 and len(left_context) > 0 and str(left_context[0]).startswith("##"):
+        prepend_word = sentence[cur_left_start]
+        if not isinstance(prepend_word, list):
+            prepend_word = [prepend_word]
+        left_context = prepend_word + left_context
+        cur_left_start -= 1
+    right_context = []
+    for segment in sentence[token_idx+1:min(len(sentence), token_idx + CONTEXT_WINDOW + 1)]:
+        if not isinstance(segment, list):
+            segment = [segment]
+        for cur_token in segment:
+            right_context.append(cur_token)
+    with_context = left_context + token + right_context
+    all_strs = [str(cur_token) for cur_token in with_context]
+    combined = []
+    for cur_token in all_strs:
+        if cur_token.startswith("##") and len(combined) > 0: # Tokenized as parts, needs to be combined with previous word
+            combined[-1] += cur_token[2:]
+        else:
+            combined.append(cur_token)
+    return [token for token in nlp(' '.join(combined))][len(left_context):len(token) + len(left_context)]
+
 def mutate(token, label_param, lemma_to_morph, nlp):
     '''
     Applies mutate to the given word
@@ -228,17 +337,17 @@ def mutate(token, label_param, lemma_to_morph, nlp):
         token = token[0]
 
     if label_param.startswith("CAPITALIZE"):
-            if label_param.split("-")[1] == "TRUE":
-                return token.text[0].upper() + token.text[1:]
-            else:
-                return token.text.lower()
+        if label_param.split("-")[1] == "TRUE":
+            return token.text[0].upper() + token.text[1:]
+        else:
+            return token.text.lower()
 
     if label_param.split('-')[1] == "PROG":
-            cur_path = get_path(token, lemma_to_morph[unidecode(token.lemma_)]) # Find current grammatical categories to apply
+            cur_path = get_path(token, lemma_to_morph[process_lemma(token.lemma_)]) # Find current grammatical categories to apply
             estar = follow_path(lemma_to_morph["estar"], cur_path) # Apply to estar
             return [nlp(estar)[0]] + [mutate(token, "MOOD-GER", lemma_to_morph, nlp)]
     elif label_param.split('-')[1] == "PERF":
-        cur_path = get_path(token, lemma_to_morph[unidecode(token.lemma_)]) # Find current grammatical categories to apply
+        cur_path = get_path(token, lemma_to_morph[process_lemma(token.lemma_)]) # Find current grammatical categories to apply
         haber = follow_path(lemma_to_morph["haber"], cur_path) # Apply to haber
 
         if len(label_param.split('-')) > 2 and label_param.split('-')[2] == "SUBJ": # Apply subjunctive if PERF-SUBJ
@@ -246,27 +355,9 @@ def mutate(token, label_param, lemma_to_morph, nlp):
         
         return [haber] + [mutate(token, "MOOD-PAST-PART", lemma_to_morph)]
 
-    lemma = unidecode(token.lemma_)
+    lemma = process_lemma(token.lemma_)
     morphology = lemma_to_morph[lemma]
-    cur_path = get_path(token)
-
-    # Going from special verb to normal verb, apply default path
-    if cur_path[0] == "VERB" and len(cur_path) == 3 and not label_param in ["MOOD-INF", "MOOD-GER", "MOOD-PAST-PART"]:
-        cur_path = ["VERB"] + DEFAULT_PATH_FOR_POS["VERB"]
-    
-    new_path = cur_path.copy()
-    index_of_change = HIERARCHY_DEF[label_param.split('-')[0]]
-    if isinstance(index_of_change, list): # Special case for verbs when changing mood
-        if new_path[2] == "SURFACE_FORM": # Special verb case
-            index_of_change = 1
-        else: # Normal verb case
-            index_of_change = 2
-    
-    # Going from normal verb to special verb, eliminate extra categories
-    if label_param in ["MOOD-INF", "MOOD-GER", "MOOD-PAST-PART"]:
-        new_path = ["VERB", '-'.join(label_param.split('-')[1:]), "SURFACE_FORM"]
-    else:
-        new_path[index_of_change] = '-'.join(label_param.split('-')[1:])
+    new_path = get_new_path(token, label_param)
 
     mutated_word = follow_path(morphology, new_path)
 
@@ -330,39 +421,21 @@ def apply_labels(doc, labels, lemma_to_morph, vocab, nlp):
     '''
     sentence = [[token] for token in doc]
     sentence = sentence + [[nlp("EOS")[0]]] # Append [EOS]
-    deletes = []
     for i, label in enumerate(labels):
-        delete = False
         for sub_label in BeautifulSoup(label, features="html.parser").find_all(True):
             name = sub_label.name.upper()
             param = sub_label.get("param", "").upper()
             param = int(param) if param.isnumeric() else param
             if len(name.split('-')) < 2 or name.split('-')[0] != "COPY":
                 sentence[i] = apply_label(sentence[i], name, param, lemma_to_morph, vocab, nlp)
+                
                 # Restore spacy for added words, add context because spacy gets confused with singular words
-                left_context = []
-                for segment in sentence[max(0, i - CONTEXT_WINDOW):i]:
-                    for token in segment:
-                        left_context.append(token)
-                right_context = []
-                for segment in sentence[i+1:min(len(sentence), i + CONTEXT_WINDOW + 1)]:
-                    for token in segment:
-                        right_context.append(token)
-                with_context = left_context + sentence[i] + right_context
-                all_strs = [str(token) for token in with_context]
-                new_segment_with_context = [token for token in nlp(' '.join(all_strs))]
-                sentence[i] = new_segment_with_context[len(left_context):len(sentence[i]) + len(left_context)]
-                # if isinstance(sentence[i], list):
-                #     sentence[i] = nlp(' '.join([token.text if type(token) != str else token for token in sentence[i]]))
-                # else:
-                #     cur_tokens = 
-                #     context = sentence[i]
-                #     sentence[i] = nlp(sentence[i].text if type(sentence[i]) != str else sentence[i])
+                sentence[i] = restore_nlp(sentence, sentence[i], i, nlp)
+
             elif name == "COPY-ADD":
                 sentence[i] = [doc[param]] + sentence[i]
             elif name == "COPY-REPLACE":
                 sentence[i] = [doc[param]]
-        deletes.append(delete)
     
     # Run copies
     # for i, token_copies in enumerate(copies):
@@ -386,27 +459,35 @@ def apply_labels(doc, labels, lemma_to_morph, vocab, nlp):
     for token in sentence:
         if isinstance(token, list):
             for cur_token in token:
-                if re.match("^[\.\,\(\)\{\}\?\!]$", cur_token.text) or first_token or no_space:
+                if re.match("^[\.\,\?\!\)\}\]\-\:\;]$", cur_token.text) or first_token or no_space:
                     corrected_sentence += cur_token.text
+                    first_token = False
+                    no_space = False
+                elif re.match("^\#\#.*$", cur_token.text): # Sub-word
+                    corrected_sentence += cur_token.text[2:]
                     first_token = False
                     no_space = False
                 else:
                     corrected_sentence += " " + cur_token.text
                 
-                if re.match("^[\¿\¡]$", cur_token.text): # Handle beginning punctuation
+                if re.match("^[\¿\¡\(\{\[\"]$", cur_token.text): # Handle beginning punctuation
                     no_space = True
         else:
-            if re.match("^[\.\,\(\)\{\}\?\¿\!\¡]$", token.text) or first_token or no_space:
+            if re.match("^[\.\,\?\¿\!\¡\)\}\]\-\:\;]$", token.text) or first_token or no_space:
                 corrected_sentence += token.text
+                first_token = False
+                no_space = False
+            elif re.match("^\#\#.*$", cur_token.text): # Sub-word
+                corrected_sentence += cur_token.text[2:]
                 first_token = False
                 no_space = False
             else:
                 corrected_sentence += " " + token.text
             
-            if re.match("^[\¿\¡]$", token.text): # Handle beginning punctuation
+            if re.match("^[\¿\¡\(\{\[\"]$", token.text): # Handle beginning punctuation
                     no_space = True
     
-    if corrected_sentence.endswith("EOS"): # Remove end token
-        corrected_sentence = corrected_sentence[:-4]
+    if corrected_sentence.endswith("E"): # Remove end token
+        corrected_sentence = corrected_sentence[:-2]
     
     return corrected_sentence

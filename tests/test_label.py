@@ -9,7 +9,7 @@ sys.path.append("..")
 import unittest
 import spacy
 
-from utils.utils import load_vocab, load_morpho_dict, create_vocab_index
+from utils.utils import load_vocab, load_morpho_dict, create_vocab_index, load_modified_nlp
 from label import label_sentence
 
 BASE_TESTS = [("Voy al tienda.",
@@ -61,7 +61,7 @@ class TestApply(unittest.TestCase):
     def setUp(self):
         self.vocab_index = create_vocab_index(load_vocab("../lang_def/vocab.txt"))
         self.lemma_to_morph = load_morpho_dict("../lang_def/morpho_dict.json")
-        self.nlp = spacy.load("es_dep_news_trf")
+        self.nlp = load_modified_nlp()
 
     def test_label(self):
         for TEST in BASE_TESTS:
