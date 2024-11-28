@@ -78,9 +78,8 @@ def link_with_mutation(errorful_token, correct_token):
         elif i >= len(correct_sequence) and i < len(errorful_sequence):
             final_sequence = correct_sequence
             break
-        else:
-            if errorful_sequence[i] != correct_sequence[i]:
-                final_sequence.append(correct_sequence[i])
+        elif errorful_sequence[i] != correct_sequence[i]:
+            final_sequence.append(correct_sequence[i])
 
     if correct_token.text[0].isupper(): # Check if capitalization needs to be applied
         final_sequence.append("<MUTATE param=\"CAPITALIZE-TRUE\"/>")
@@ -94,7 +93,6 @@ def verify_mutation(token, sentence, token_idx, labels, lemma_to_morph, nlp, cor
     for label in labels:
         if "MUTATE" in label:
             
-            token = restore_nlp(sentence, token, token_idx, nlp)
             if not isinstance(token, list):
                 token = [token]
 
@@ -113,6 +111,7 @@ def verify_mutation(token, sentence, token_idx, labels, lemma_to_morph, nlp, cor
                 else:
                     # If no correct token, 
                     raise KeyError
+            token = restore_nlp(sentence, token, token_idx, nlp)
     return token[0]
 
 def label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose=False, silence_warnings=False, strict=False):
@@ -247,7 +246,7 @@ def label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose=
                         raise FailedToMeetStrictRequirementException(msg)
                     elif not silence_warnings:
                         print(msg)
-                    print(f"Mutation: {mutation_labels}\nDefaulting to REPLACE (not preferred)")
+                        print(f"Mutation: {mutation_labels}\nDefaulting to REPLACE (not preferred)")
                     cur_labels.append([f"<REPLACE param=\"{vocab_index[correct_doc[correct_idx].text]}\"/>"])
                 else:
                     cur_labels.append(mutation_labels)

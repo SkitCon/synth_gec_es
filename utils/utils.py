@@ -15,7 +15,7 @@ from unidecode import unidecode
 from utils.custom_errors import InvalidLabelException
 from utils.custom_errors import NotInDictionaryException
 
-CONTEXT_WINDOW = 1 # Context window for spacy analysis of edited tokens
+CONTEXT_WINDOW = 2 # Context window for spacy analysis of edited tokens
 
 DEFAULT_PATH_FOR_POS = {"NOUN": ["NOUN", "SING", "MASC", "SURFACE_FORM"],
                          "ADJ": ["ADJ", "SING", "MASC", "SURFACE_FORM"],
@@ -148,7 +148,7 @@ def follow_path(dictionary, path):
     
     try:
         return follow_path(dictionary[path[0]], path[1:])
-    except KeyError: # Failure to resolve, most likely due to change in POS or missing entry
+    except KeyError as e: # Failure to resolve, most likely due to change in POS or missing entry
         if path[0] in POS: # If we are at the beginning of the path, we have some options
             cur_pos = path[0]
             if cur_pos != "VERB": # if it not a verb, we can try looking at other POS
@@ -198,7 +198,7 @@ def follow_path(dictionary, path):
             path = DEFAULT_PATH_FOR_POS[path[0]][1:]
             return follow_path(new_dict, path)
         else: # Too deep to resolve, go back up until back at the beginning of the path
-            raise KeyError
+            raise KeyError(str(e).strip("'"))
 
 {"NOUN": ["NOUN", "SING", "MASC", "SURFACE_FORM"],
                          "ADJ": ["ADJ", "SING", "MASC", "SURFACE_FORM"],
@@ -395,8 +395,6 @@ def restore_nlp(sentence, token, token_idx, nlp):
             return [token for token in nlp(' '.join(combined))]
     else:
         return res
-
-
 
 def mutate(token, label_param, lemma_to_morph, nlp):
     '''
