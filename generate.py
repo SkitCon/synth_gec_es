@@ -17,6 +17,8 @@ from label import label_sentence
 
 from utils.utils import UPOS_TO_SIMPLE, AVAILABLE_TYPES, HIERARCHY_DEF, DEFAULT_PATH_FOR_POS
 
+from utils.custom_errors import FailedToMeetStrictRequirementException
+
 '''
 Definition of Error Dictionary
 {
@@ -270,7 +272,8 @@ def apply_error(error, sentence, lemma_to_morph, vocab, nlp, verbose=False):
 def generate_errorful_sentences(input_file, output_file, errors,
                                 lemma_to_morph, vocab,
                                 min_error=0, max_error=3, num_sentences=1,
-                                include_token_labels=True, verify=False, verbose=False, silence_warnings=False):
+                                include_token_labels=True, verify=False, verbose=False,
+                                silence_warnings=False, strict=False):
     '''
     '''
     nlp = spacy.load("es_dep_news_trf")
@@ -308,13 +311,20 @@ def generate_errorful_sentences(input_file, output_file, errors,
         for sentence in errorful_sentences:
             if include_token_labels:
                 try:
-                    token_labels = label_sentence(sentence[0], sentence[1], lemma_to_morph, vocab_index, nlp, verbose=verbose)
+                    token_labels = label_sentence(sentence[0], sentence[1], lemma_to_morph, vocab_index, nlp, verbose=verbose,
+                                                  silence_warnings=silence_warnings, strict=strict)
+                except FailedToMeetStrictRequirementException as e:
+                    if not silence_warnings:
+                        print(f"{e}\nDue to strict requirement, sentence is excluded.")
+                    excluded_sentences += 1
+                    continue
                 except Exception as e:
                     if not silence_warnings:
                         print(f"LABEL GENERATION FAILED!\n\t{e} while generating sentence. Not including sentence in output file.")
                         print(traceback.format_exc())
                     excluded_sentences += 1
                     continue
+                
                 if verify:
                     try:
                         decoded_sentence = apply_labels(nlp(sentence[0]), token_labels.split('\t'), lemma_to_morph, vocab, nlp)
@@ -363,6 +373,9 @@ if __name__ == "__main__":
     parser.add_argument("-sw", "--silence_warnings",
                         help="Silence warnings",
                         action="store_true")
+    parser.add_argument("--strict",
+                        help="Be strict about which sentences are included in the output file. This has the primary effect of excluding sentences where a MUTATE verification failed and a REPLACE had to be used to repair the labels.",
+                        action="store_true")
 
     args = parser.parse_args()
 
@@ -380,4 +393,5 @@ if __name__ == "__main__":
     generate_errorful_sentences(input_file, output_file, errors,
                                 load_morpho_dict(args.dict_file), load_vocab(args.vocab_file),
                                 min_error=args.min_error, max_error=args.max_error, num_sentences=args.num_sentences,
-                                include_token_labels=args.token, verify=args.verify, verbose=args.verbose, silence_warnings=args.silence_warnings)
+                                include_token_labels=args.token, verify=args.verify, verbose=args.verbose,
+                                silence_warnings=args.silence_warnings, strict=args.strict)

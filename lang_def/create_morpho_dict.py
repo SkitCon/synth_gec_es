@@ -1,4 +1,3 @@
-
 '''
 File: create_morpho_dict.py
 Author: Amber Converse
@@ -119,9 +118,9 @@ def fill_dict(row):
         if mood == "GER":
             lemma_to_morph[lemma]["VERB"][mood]["SURFACE_FORM"] = row["gerund"]
         elif mood == "PART-PART":
-            lemma_to_morph[lemma]["VERB"]["SURFACE_FORM"] = row["pastparticiple"]
+            lemma_to_morph[lemma]["VERB"][mood]["SURFACE_FORM"] = row["pastparticiple"]
         elif mood == "INF":
-            lemma_to_morph[lemma]["VERB"]["SURFACE_FORM"] = lemma
+            lemma_to_morph[lemma]["VERB"][mood]["SURFACE_FORM"] = lemma
 
 def create_default_dict(wiki_file, verb_forms_file, output_file, manual_entries_file):
     global lemma_to_morph
@@ -154,7 +153,7 @@ def create_default_dict(wiki_file, verb_forms_file, output_file, manual_entries_
             number, gender = get_category(tags, raw_tags, category=["number", "gender"])
             
             if pos in ["NOUN", "ADJ", "ADV"]:
-                lemma_to_morph[lemma][pos][number][gender]["SURFACE_FORM"] = form["form"]
+                lemma_to_morph[lemma][pos][number][gender]["SURFACE_FORM"] = re.sub(r"ísim", '', form["form"]) # Get rid of superlative suffix if it exists
                 continue
             elif pos == "PRONOUN":
                 case = next(get_category(tags, raw_tags, category=["case"]))
@@ -162,10 +161,10 @@ def create_default_dict(wiki_file, verb_forms_file, output_file, manual_entries_
                 definite = next(get_category(tags, raw_tags, category=["definite"]))
             
             if pos == "PRONOUN":
-                lemma_to_morph[lemma][pos][number][gender][case]["SURFACE_FORM"] = form["form"]
+                lemma_to_morph[lemma][pos][number][gender][case]["SURFACE_FORM"] = re.sub(r"ísim", '', form["form"]) # Get rid of superlative suffix if it exists
                 continue
             elif pos == "ARTICLE":
-                lemma_to_morph[lemma][pos][number][gender][definite]["SURFACE_FORM"] = form["form"]
+                lemma_to_morph[lemma][pos][number][gender][definite]["SURFACE_FORM"] = re.sub(r"ísim", '', form["form"]) # Get rid of superlative suffix if it exists
                 continue
 
     df = pd.read_csv(verb_forms_file)

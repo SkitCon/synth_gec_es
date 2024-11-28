@@ -2,7 +2,7 @@
 [![en](https://img.shields.io/badge/lang-en-red.svg)](README.md)
 [![es](https://img.shields.io/badge/lang-es-yellow.svg)](README-es.md)
 
-**version 0.5.2**
+**version 0.5.3**
 
 SYNTHetic Grammatical Error Correction for Spanish (ES) is a system for generating synthetic GEC data for common Spanish grammatical errors to train a GEC model.
 
@@ -30,12 +30,14 @@ transformers == 4.31.0
 
 ## Scripts
 
+Note: If using the same file organization as the repo (i.e. if you cloned this repo), do not worry about the --dict_file or --vocab_file args.
+
 ### generate.py
 
 The main script is generate.py. This script can be ran as:
 
 ```
-python generate.py INPUT_FILE OUTPUT_FILE ERROR_FILE_1 ERROR_FILE_2 ... ERROR_FILE_N [--min/-min_error] [minimum number of errors in a sentence] [-max/--max_error] [maximum number of errors in a sentence] [-d/--dict_file] [dictionary file] [--vocab_file] [vocab file] [--seed] [seed] [-n/--num-sentences] [number of sentences to generate for each original] [-t/--token] [--verify] [-v/--verbose] [-sw/--silence_warnings]
+python generate.py INPUT_FILE OUTPUT_FILE ERROR_FILE_1 ERROR_FILE_2 ... ERROR_FILE_N [--min/-min_error] [minimum number of errors in a sentence] [-max/--max_error] [maximum number of errors in a sentence] [-d/--dict_file] [dictionary file] [--vocab_file] [vocab file] [--seed] [seed] [-n/--num-sentences] [number of sentences to generate for each original] [-t/--token] [--verify] [-v/--verbose] [-sw/--silence_warnings] [--strict]
 ```
 
 This script generates synthetic errorful sentences from well-formed Spanish sentences in a corpus.
@@ -53,6 +55,7 @@ This script generates synthetic errorful sentences from well-formed Spanish sent
 * --verify means the generated token labels will be verified using the decode algorithm to ensure that the result matches the correct sentence. Note that this will generally double the time to label, but guarantees that the labels are valid
 * --verbose means debugging code will print
 * --silence_warnings means warnings will not be printed, such as a mutation being replaced by a replace
+* --strict means the script will be strict about which sentences are included in the output file. This has the primary effect of excluding sentences where a MUTATE verification failed and a REPLACE had to be used to repair the labels.
 
 ### decode.py
 
@@ -75,7 +78,7 @@ This script takes errorful sentences + token-level labels and decodes them into 
 Ran as:
 
 ```
-python3 label.py INPUT_FILE [OUTPUT_FILE] [-d/--dictionary-file] [dictionary file] [--vocab_file] [vocab file] [--verify] [-v/--verbose] [-sw/--silence_warnings]
+python3 label.py INPUT_FILE [OUTPUT_FILE] [-d/--dictionary-file] [dictionary file] [--vocab_file] [vocab file] [--verify] [-v/--verbose] [-sw/--silence_warnings] [--strict]
 ```
 
 This script takes errorful sentences + target sentences and translates them into token-level edits using shortest edit distance.
@@ -87,6 +90,7 @@ This script takes errorful sentences + target sentences and translates them into
 * --verify means the generated token labels will be verified using the decode algorithm to ensure that the result matches the correct sentence. Note that this will generally double the time to label, but guarantees that the labels are valid
 * --verbose means debugging code will print
 * --silence_warnings means warnings will not be printed, such as a mutation being replaced by a replace
+* --strict means the script will be strict about which sentences are included in the output file. This has the primary effect of excluding sentences where a MUTATE verification failed and a REPLACE had to be used to repair the labels.
 
 ## Definitions
 

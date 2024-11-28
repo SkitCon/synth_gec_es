@@ -11,3 +11,7 @@ class InvalidLabelException(Exception):
 class NotInDictionaryException(Exception):
     def __init__(self, message):
         super().__init__(message)
+
+class FailedToMeetStrictRequirementException(Exception):
+    def __init__(self, message):
+        super().__init__(message)

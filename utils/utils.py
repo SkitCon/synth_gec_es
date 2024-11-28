@@ -148,15 +148,66 @@ def follow_path(dictionary, path):
     
     try:
         return follow_path(dictionary[path[0]], path[1:])
-    except KeyError: # Failure to resolve, most likely due to change in POS, default to this POS's default path if no surface form to use
-        if "SURFACE_FORM" in dictionary:
-            return dictionary["SURFACE_FORM"]
-        elif path[0] in POS:
+    except KeyError: # Failure to resolve, most likely due to change in POS or missing entry
+        if path[0] in POS: # If we are at the beginning of the path, we have some options
+            cur_pos = path[0]
+            if cur_pos != "VERB": # if it not a verb, we can try looking at other POS
+                tries = ["NOUN", "ADJ", "ADV"]
+                if cur_pos in tries:
+                    tries.remove(cur_pos)
+                for pos_try in tries:
+                    try:
+                        return follow_path(dictionary[pos_try], path[1:3] + ["SURFACE_FORM"])
+                    except KeyError: # If there is a KeyError just keep going
+                        pass
+                # Try other POS
+                if cur_pos != "PRONOUN":
+                    try:
+                        if cur_pos == "PERSONAL_PRONOUN":
+                            return follow_path(dictionary["PRONOUN"], path[1:4] + ["SURFACE_FORM"])
+                        else:
+                            return follow_path(dictionary["PRONOUN"], path[1:3] + ["NOM", "SURFACE_FORM"])
+                    except KeyError:
+                        pass
+                if cur_pos != "PERSONAL_PRONOUN":
+                    try:
+                        if cur_pos == "PRONOUN":
+                            return follow_path(dictionary["PERSONAL_PRONOUN"], path[1:4] + ["CLITIC", "NO", "SURFACE_FORM"])
+                        else:
+                            return follow_path(dictionary["PERSONAL_PRONOUN"], path[1:3] + ["NOM", "CLITIC", "NO", "SURFACE_FORM"])
+                    except KeyError:
+                        pass
+                    try:
+                        if cur_pos == "PRONOUN":
+                            return follow_path(dictionary["PERSONAL_PRONOUN"], path[1:4] + ["BASE", "NO", "SURFACE_FORM"])
+                        else:
+                            return follow_path(dictionary["PERSONAL_PRONOUN"], path[1:3] + ["NOM", "BASE", "NO", "SURFACE_FORM"])
+                    except KeyError:
+                        pass
+                if cur_pos != "ARTICLE":
+                    try:
+                        return follow_path(dictionary["ARTICLE"], path[1:3] + ["DEF", "SURFACE_FORM"])
+                    except KeyError:
+                        pass
+                    try:
+                        return follow_path(dictionary["ARTICLE"], path[1:3] + ["IND", "SURFACE_FORM"])
+                    except KeyError:
+                        pass
+            # As a last resort, try the default path for this POS
             new_dict = dictionary[path[0]]
             path = DEFAULT_PATH_FOR_POS[path[0]][1:]
             return follow_path(new_dict, path)
-        else: # Too deep to resolve, go back up
+        else: # Too deep to resolve, go back up until back at the beginning of the path
             raise KeyError
+
+{"NOUN": ["NOUN", "SING", "MASC", "SURFACE_FORM"],
+                         "ADJ": ["ADJ", "SING", "MASC", "SURFACE_FORM"],
+                         "ADV": ["ADV", "SING", "MASC", "SURFACE_FORM"],
+                         "PRONOUN": ["PRONOUN", "SING", "MASC", "NOM", "SURFACE_FORM"],
+                         "PERSONAL_PRONOUN": ["PERSONAL_PRONOUN", "SING", "MASC", "NOM", "BASE", "NO", "SURFACE_FORM"],
+                         "ARTICLE": ["ARTICLE", "SING", "MASC", "DEF", "SURFACE_FORM"],
+                         "VERB": ["VERB", "SING", "IND", "PRES", "3", "SURFACE_FORM"],
+                         "X": ["X", "SURFACE_FORM"]}
 
 def get_path(token):
     '''
@@ -189,12 +240,19 @@ def get_path(token):
 
     # Clitic pronouns are designated as "Npr" or not after a preposition, we use this to distinguish them
     pronoun_type = token.morph.get("PrepCase")[0] if token.morph.get("PrepCase") else "BASE"
-    if pronoun_type == "Npr":
+    # Dative clitic pronouns are not designated as "Npr", non-clitic pronouns do not have dative morphology in Spanish,
+    # so we can assume a dative personal pronoun is clitic
+    if pronoun_type == "Npr" or case == "DAT":
         pronoun_type = "CLITIC"
     else:
         pronoun_type = "BASE"
     
     reflexive = token.morph.get("Reflex")[0] if token.morph.get("Reflex") else "NO"
+    # Once again, weird case with dative clitic pronouns, something like "se" in "se lo doy" has reflexive morphology, but is not tagged as reflexive
+    # by spaCy. Instead it is given the preposition case "Npr", which dative clitic pronouns do not normally have, except when they have reflexive morphology.
+    # I can see the logic in this decision (dative = implicit preposition unless it is in the special reflexive form), but it was difficult to debug.
+    if pronoun_type == "CLITIC" and case == "DAT" and (token.morph.get("PrepCase")[0] if token.morph.get("PrepCase") else "BASE") == "Npr":
+        reflexive = "YES"
 
     definite = token.morph.get("Definite")[0].upper() if token.morph.get("Definite") else "DEF"
    
@@ -311,7 +369,34 @@ def restore_nlp(sentence, token, token_idx, nlp):
             combined[-1] += cur_token[2:]
         else:
             combined.append(cur_token)
-    return [token for token in nlp(' '.join(combined))][len(left_context):len(token) + len(left_context)]
+    res = [token for token in nlp(' '.join(combined))][len(left_context):len(token) + len(left_context)]
+    # If tokenization changes for sub-words with context, we can't really add context, so we have to just do the word by itself
+    # and hope for the best
+    if [str(cur_token) for cur_token in res] != [str(cur_token for cur_token in token)]:
+        all_strs = [str(cur_token) for cur_token in token]
+        combined = []
+        extra_token = False
+        for cur_token in all_strs:
+            if cur_token.startswith("##") and len(combined) > 0: # Tokenized as parts, needs to be combined with previous word
+                combined[-1] += cur_token[2:]
+            # If the below statement triggers, there is a sub-word is at the beginning of the sequence, but we can't grab the
+            # other main word before it because we already know it changes tokenization!! To solve this, I just prepend 1 to the
+            # sub-word. This is because 1 + sub-word will always tokenize as [1, ##sub-word]. This works because we take advantage
+            # of the logic for tokenizing numeric suffixes (in Spanish this is something 1ro/1o for primero, the English equivalent
+            # is 1st for first). This is a very weird solution, I know. This solution is only tested for BERT-like tokenizers.
+            elif cur_token.startswith("##"):
+                combined.append("1" + cur_token[2:])
+                extra_token = True
+            else:
+                combined.append(cur_token)
+        if extra_token: # Added 1 to the beginning to force tokenization in parts, need to remove it
+            return [token for token in nlp(' '.join(combined))][1:]
+        else:
+            return [token for token in nlp(' '.join(combined))]
+    else:
+        return res
+
+
 
 def mutate(token, label_param, lemma_to_morph, nlp):
     '''
@@ -457,24 +542,11 @@ def apply_labels(doc, labels, lemma_to_morph, vocab, nlp):
     first_token = True
     no_space = False
     for token in sentence:
-        if isinstance(token, list):
-            for cur_token in token:
-                if re.match("^[\.\,\?\!\)\}\]\-\:\;]$", cur_token.text) or first_token or no_space:
-                    corrected_sentence += cur_token.text
-                    first_token = False
-                    no_space = False
-                elif re.match("^\#\#.*$", cur_token.text): # Sub-word
-                    corrected_sentence += cur_token.text[2:]
-                    first_token = False
-                    no_space = False
-                else:
-                    corrected_sentence += " " + cur_token.text
-                
-                if re.match("^[\¿\¡\(\{\[\"]$", cur_token.text): # Handle beginning punctuation
-                    no_space = True
-        else:
-            if re.match("^[\.\,\?\¿\!\¡\)\}\]\-\:\;]$", token.text) or first_token or no_space:
-                corrected_sentence += token.text
+        if not isinstance(token, list):
+            token = [token]
+        for cur_token in token:
+            if re.match("^[\.\,\?\!\)\}\]\-\:\;]$", cur_token.text) or first_token or no_space:
+                corrected_sentence += cur_token.text
                 first_token = False
                 no_space = False
             elif re.match("^\#\#.*$", cur_token.text): # Sub-word
@@ -482,10 +554,10 @@ def apply_labels(doc, labels, lemma_to_morph, vocab, nlp):
                 first_token = False
                 no_space = False
             else:
-                corrected_sentence += " " + token.text
+                corrected_sentence += " " + cur_token.text
             
-            if re.match("^[\¿\¡\(\{\[\"]$", token.text): # Handle beginning punctuation
-                    no_space = True
+            if re.match("^[\¿\¡\(\{\[\"]$", cur_token.text): # Handle beginning punctuation
+                no_space = True
     
     if corrected_sentence.endswith("E"): # Remove end token
         corrected_sentence = corrected_sentence[:-2]

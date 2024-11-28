@@ -29,6 +29,8 @@ from unidecode import unidecode
 
 from utils.utils import load_morpho_dict, load_vocab, get_path, get_new_path, create_vocab_index, apply_labels, mutate, CONTEXT_WINDOW, process_lemma, load_modified_nlp, restore_nlp, clean_text
 
+from utils.custom_errors import FailedToMeetStrictRequirementException
+
 COST = {"KEEP": 0,
         "REPLACE": 1,
         "DELETE": 1,
@@ -104,8 +106,8 @@ def verify_mutation(token, sentence, token_idx, labels, lemma_to_morph, nlp, cor
                     # Add entry to dict
                     new_path = [process_lemma(token[0].lemma_)] + get_new_path(correct_token, param)
                     if not silence_warnings:
-                        print(f"Adding {correct_token.text} to dict at {new_path}")
-                    add_entry_to_morphology(correct_token.text, new_path, lemma_to_morph)
+                        print(f"Adding {correct_token.text.lower()} to dict at {new_path}")
+                    add_entry_to_morphology(correct_token.text.lower(), new_path, lemma_to_morph)
                     # Try again
                     token = [mutate(token[0], param, lemma_to_morph, nlp)]
                 else:
@@ -113,13 +115,13 @@ def verify_mutation(token, sentence, token_idx, labels, lemma_to_morph, nlp, cor
                     raise KeyError
     return token[0]
 
-def label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose=False, silence_warnings=False):
+def label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose=False, silence_warnings=False, strict=False):
 
     errorful_doc = nlp(errorful)
     correct_doc = nlp(correct)
 
     if verbose:
-        print(f"=================================\nTesting labels for:\n{errorful}\nto\n{correct}")
+        print(f"=================================\nGenerating labels for:\n{errorful}\nto\n{correct}")
         print(f"Tokenization:\n\tErrorful: {errorful_doc}\n\tCorrect: {correct_doc}")
 
     dp = np.zeros((len(errorful_doc)+1, len(correct_doc)+1))
@@ -236,10 +238,15 @@ def label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose=
                     error = e
 
                 if failed_to_resolve:
-                    if key_error and not silence_warnings:
-                        print(f"Failed to resolve generated mutation for {errorful_doc[errorful_idx]} to {correct_doc[correct_idx]} due to KeyError: {error}")
+                    if key_error:
+                        msg = f"Failed to resolve generated mutation for {errorful_doc[errorful_idx]} to {correct_doc[correct_idx]} due to KeyError: {error}"
+                    else:
+                        msg = f"Failed to resolve generated mutation for {errorful_doc[errorful_idx]} to {correct_doc[correct_idx]} due to incorrect mutation\nResult of Mutation: {mutated_token}"
+                    
+                    if strict:
+                        raise FailedToMeetStrictRequirementException(msg)
                     elif not silence_warnings:
-                        print(f"Failed to resolve generated mutation for {errorful_doc[errorful_idx]} to {correct_doc[correct_idx]} due to incorrect mutation\nResult of Mutation: {mutated_token}")
+                        print(msg)
                     print(f"Mutation: {mutation_labels}\nDefaulting to REPLACE (not preferred)")
                     cur_labels.append([f"<REPLACE param=\"{vocab_index[correct_doc[correct_idx].text]}\"/>"])
                 else:
@@ -251,8 +258,11 @@ def label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose=
                         param = i
                         break
                 if param == -1:
-                    if not silence_warnings:
-                        print(f"COPY-REPLACE FAILED!\n\tThought {correct_doc[correct_idx].lemma_} was in {errorful_doc}.\n\tUsing normal replace (not preferred)")
+                    msg = f"COPY-REPLACE FAILED!\n\tThought {correct_doc[correct_idx].lemma_} was in {errorful_doc}.\n\tUsing normal replace (not preferred)"
+                    if strict:
+                        raise FailedToMeetStrictRequirementException(msg)
+                    elif not silence_warnings:
+                        print(msg)
                     cur_labels.append([f"<REPLACE param=\"{vocab_index[correct_doc[correct_idx].text]}\"/>"])
                 else:
                     cur_labels.append([f"<COPY-REPLACE param=\"{param}\"/>"])
@@ -272,11 +282,15 @@ def label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose=
                             error = e
 
                         if failed_to_resolve:
-                            if key_error and not silence_warnings:
-                                print(f"Failed to resolve generated mutation for {errorful_doc[param]} to {correct_doc[correct_idx]} due to KeyError: {error}")
+                            if key_error:
+                                msg = f"Failed to resolve generated mutation for {errorful_doc[param]} to {correct_doc[correct_idx]} due to KeyError: {error}"
+                            else:
+                                msg = f"Failed to resolve generated mutation for {errorful_doc[param]} to {correct_doc[correct_idx]} due to incorrect mutation\nResult of Mutation: {mutated_token}"
+                            
+                            if strict:
+                                raise FailedToMeetStrictRequirementException(msg)
                             elif not silence_warnings:
-                                print(f"Failed to resolve generated mutation for {errorful_doc[param]} to {correct_doc[correct_idx]} due to incorrect mutation\nResult of Mutation: {mutated_token}")
-                            print(f"Mutation: {mutation_labels}\nDefaulting to REPLACE (not preferred)")
+                                print(msg)
                             cur_labels[-1] = [f"<REPLACE param=\"{vocab_index[correct_doc[correct_idx].text]}\"/>"]
                         else:
                             cur_labels[-1] += mutation_labels
@@ -308,8 +322,11 @@ def label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose=
                         param = i
                         break
                 if param == -1:
-                    if not silence_warnings:
-                        print(f"COPY-ADD FAILED!\n\tThought {correct_doc[correct_idx].lemma_} was in {errorful_doc}.\n\tUsing normal replace (not preferred)")
+                    msg = f"COPY-ADD FAILED!\n\tThought {correct_doc[correct_idx].lemma_} was in {errorful_doc}.\n\tUsing normal replace (not preferred)"
+                    if strict:
+                        raise FailedToMeetStrictRequirementException(msg)
+                    elif not silence_warnings:
+                        print(msg)
                     cur_labels.append([f"<ADD param=\"{vocab_index[correct_doc[correct_idx].text]}\"/>"])
                 else:
                     cur_labels.append([f"<COPY-ADD param=\"{param}\"/>"])
@@ -329,11 +346,15 @@ def label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose=
                             error = e
 
                         if failed_to_resolve:
-                            if key_error and not silence_warnings:
-                                print(f"Failed to resolve generated mutation for {errorful_doc[param]} to {correct_doc[correct_idx]} due to KeyError: {error}")
+                            if key_error:
+                                msg = f"Failed to resolve generated mutation for {errorful_doc[param]} to {correct_doc[correct_idx]} due to KeyError: {error}"
+                            else:
+                                msg = f"Failed to resolve generated mutation for {errorful_doc[param]} to {correct_doc[correct_idx]} due to incorrect mutation\nResult of Mutation: {mutated_token}"
+                            
+                            if strict:
+                                raise FailedToMeetStrictRequirementException(msg)
                             elif not silence_warnings:
-                                print(f"Failed to resolve generated mutation for {errorful_doc[param]} to {correct_doc[correct_idx]} due to incorrect mutation\nResult of Mutation: {mutated_token}")
-                            print(f"Mutation: {mutation_labels}\nDefaulting to ADD (not preferred)")
+                                print(msg)
                             cur_labels[-1] = [f"<ADD param=\"{vocab_index[correct_doc[correct_idx].text]}\"/>"]
                         else:
                             cur_labels[-1] += mutation_labels
@@ -386,7 +407,7 @@ def label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose=
     labels = '\t'.join([' '.join(cur_labels) for cur_labels in labels])
     return labels
 
-def main(input_file, output_file, lemma_to_morph, vocab, verify=False, verbose=False, silence_warnings=False):
+def main(input_file, output_file, lemma_to_morph, vocab, verify=False, verbose=False, silence_warnings=False, strict=False):
 
     nlp = load_modified_nlp()
     vocab_index = create_vocab_index(vocab)
@@ -403,26 +424,36 @@ def main(input_file, output_file, lemma_to_morph, vocab, verify=False, verbose=F
                 cur_time = time.time()
                 print(f"===================================\nProgress Report:\n{round(i / len(sentence_pairs) * 100, 1)}% done.\nFailed to generate labels for {failed_labels} sentences out of {i}.\nAverage time to label one sentence: {round((cur_time - start_time) / i, 3)} seconds")
             try:
-                cur_labels = label_sentence(sentences[0], sentences[1], lemma_to_morph, vocab_index, nlp, verbose=verbose, silence_warnings=silence_warnings)
+                cur_labels = label_sentence(sentences[0], sentences[1], lemma_to_morph, vocab_index, nlp, verbose=verbose, silence_warnings=silence_warnings, strict=strict)
                 labels.append(cur_labels)
+            except FailedToMeetStrictRequirementException as e:
+                if not silence_warnings:
+                    print(f"Failed to generate labels due to strict requirements: {e}\n\tErrorful sentence: {sentences[0]}\n\tCorrect sentence: {sentences[1]}")
+                failed_labels += 1
+                labels.append([])
             except Exception as e:
                 if not silence_warnings:
                     print(f"Failed to generate labels due to {e}\n\tErrorful sentence: {sentences[0]}\n\tCorrect sentence: {sentences[1]}")
                     print(traceback.format_exc())
                 failed_labels += 1
+                labels.append([])
 
     start_time = time.time()
     successful_labels = 0
+    failed_verification = 0
     with open(output_file, 'w') as f:
         for i in range(len(sentence_pairs)):
             errorful_sentence = sentence_pairs[i][0]
             correct_sentence = sentence_pairs[i][1]
             token_labels = labels[i]
 
+            if len(token_labels) == 0: # Failed labels
+                continue
+
             if verify:
                 if i in list(range(100, len(sentence_pairs), 100)):
                     cur_time = time.time()
-                    print(f"===================================\nProgress Report on Verification:\n{round(i / len(sentence_pairs) * 100, 1)}% done.\n{failed_labels} sentences failed verification out of {i}.\nAverage time to verify one sentence: {round((cur_time - start_time) / i, 3)} seconds")
+                    print(f"===================================\nProgress Report on Verification:\n{round(i / len(sentence_pairs) * 100, 1)}% done.\n{failed_verification} sentences failed verification out of {i}.\nAverage time to verify one sentence: {round((cur_time - start_time) / i, 3)} seconds")
                 try:
                     tokenized_errorful_sentence = nlp(errorful_sentence)
                     if verbose:
@@ -431,26 +462,26 @@ def main(input_file, output_file, lemma_to_morph, vocab, verify=False, verbose=F
                 except KeyError as e:
                     if not silence_warnings:
                         print(f"VERIFY FAILED!!!\n\tCaused by KeyError: {e}\n\tReport:\n\tErrorful Sentence:{errorful_sentence}\n\tGenerated Labels:{token_labels}\n\tTarget:{correct_sentence}")
-                    failed_labels += 1
+                    failed_verification += 1
                     continue
                 except IndexError as e:
                     if not silence_warnings:
                         print(f"VERIFY FAILED!!!\n\tCaused by IndexError: {e}\n\tReport:\n\tErrorful Sentence:{errorful_sentence}\n\tGenerated Labels:{token_labels}\n\tTarget:{correct_sentence}")
                         print(traceback.format_exc())
-                    failed_labels += 1
+                    failed_verification += 1
                     continue
                 if decoded_sentence != correct_sentence:
                     if not silence_warnings:
                         print(f"VERIFY FAILED!\nReport:\n\tErrorful Sentence:{errorful_sentence}\n\tGenerated Labels:{token_labels}\n\tTarget:{correct_sentence}\n\tResult from Decode:{decoded_sentence}")
-                    failed_labels += 1
+                    failed_verification += 1
                     continue
             
             f.write(f"{errorful_sentence}\n{token_labels}\n{correct_sentence}\n\n")
             successful_labels += 1
-    print(f"Failed to label {failed_labels} sentences.")
+    print(f"Failed to label {failed_labels + failed_verification} sentences.")
     print(f"Successfully labeled {successful_labels} sentences")
 
-    new_dict_path = "land_def/morpho_dict_updated.json"
+    new_dict_path = "lang_def/morpho_dict_updated.json"
     if verbose:
         print(f"Exporting updated morphology dictionary to {new_dict_path}")
     with open(new_dict_path, 'w') as f:
@@ -471,6 +502,9 @@ if __name__ == "__main__":
     parser.add_argument("-sw", "--silence_warnings",
                         help="Silence warnings",
                         action="store_true")
+    parser.add_argument("--strict",
+                        help="Be strict about which sentences are included in the output file. This has the primary effect of excluding sentences where a MUTATE verification failed and a REPLACE had to be used to repair the labels.",
+                        action="store_true")
 
     args = parser.parse_args()
 
@@ -480,4 +514,5 @@ if __name__ == "__main__":
     else:
         output_file = args.output_file
 
-    main(args.input_file, output_file, load_morpho_dict(args.dict_file), load_vocab(args.vocab_file), verify=args.verify, verbose=args.verbose, silence_warnings=args.silence_warnings)
+    main(args.input_file, output_file, load_morpho_dict(args.dict_file), load_vocab(args.vocab_file),
+         verify=args.verify, verbose=args.verbose, silence_warnings=args.silence_warnings, strict=args.strict)
