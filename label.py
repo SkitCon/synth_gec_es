@@ -98,7 +98,7 @@ def verify_mutation(token, sentence, token_idx, labels, lemma_to_morph, nlp, cor
 
             param = BeautifulSoup(label, features="html.parser").find_all(True)[0].get("param", "").upper()
             try:
-                token = [mutate(token[0], param, lemma_to_morph, nlp)]
+                token = [mutate(token[0], param, lemma_to_morph, nlp)] + token[1:]
             except KeyError:
                 if correct_token:
                     # Add entry to dict
@@ -112,7 +112,17 @@ def verify_mutation(token, sentence, token_idx, labels, lemma_to_morph, nlp, cor
                     # If no correct token, 
                     raise KeyError
             token = restore_nlp(sentence, token, token_idx, nlp)
-    return token[0]
+    if len(token) > 1:
+        all_strs = [str(cur_token) for cur_token in token]
+        combined = []
+        for cur_token in all_strs:
+            if cur_token.startswith("##") and len(combined) > 0: # Tokenized as parts, needs to be combined with previous word
+                combined[-1] += cur_token[2:]
+            else:
+                combined.append(cur_token)
+        return ' '.join(combined)
+    else:
+        return token[0]
 
 def label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose=False, silence_warnings=False, strict=False):
 
