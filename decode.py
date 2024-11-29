@@ -63,6 +63,7 @@ def correct_errorful_sentences(input_file, output_file, dict_file, vocab_file,
             failed_sentences += cur_failed_sentences
             cur_time = time.time()
             print(f"Successfully decoded {len(corrected_sentences)} in {round(cur_time-start_time, 2)} seconds.\nFailed to decode {cur_failed_sentences} sentences.\nAverage time per sentence: {round((cur_time-start_time) / len(slice), 3)}")
+            print(f"{round(min(i+n_cores, len(pairs)-1) / len(pairs) * 100, 1)}% done.")
 
     with open(output_file, 'w') as f:
         for corrected_sentence in corrected_sentences:

@@ -502,6 +502,7 @@ def main(input_file, output_file, lemma_to_morph, vocab, spacy_model="es_dep_new
                 failed_labels += len([label for label in new_labels if len(label) == 0])
                 cur_time = time.time()
                 print(f"===================================\nCompleted labeling for {len(new_labels)} sentences in {round(cur_time - start_time, 2)} seconds.\n{len([label for label in new_labels if len(label) == 0])} could not be labeled.\nAverage {round((cur_time - start_time) / n_cores, 3)} seconds per sentence")
+                print(f"{round(min(i+n_cores, len(sentence_pairs)-1) / len(sentence_pairs) * 100, 1)}% done.")
 
     start_time = time.time()
     successful_labels = 0
@@ -530,7 +531,8 @@ def main(input_file, output_file, lemma_to_morph, vocab, spacy_model="es_dep_new
                     successful_labels += 1
             cur_time = time.time()
             if verify:
-                print(f"Completed verification for {len(decoded_sentences)} sentences in {round(cur_time - start_time, 2)} seconds.\n{failed_this_round} sentences failed verification.\nAverage {round((cur_time - start_time) / n_cores, 3)} seconds per sentence") 
+                print(f"Completed verification for {len(decoded_sentences)} sentences in {round(cur_time - start_time, 2)} seconds.\n{failed_this_round} sentences failed verification.\nAverage {round((cur_time - start_time) / n_cores, 3)} seconds per sentence")
+                print(f"{round(min(i+n_cores, len(sentence_pairs)-1) / len(sentence_pairs) * 100, 1)}% done.")
             
     print(f"===============================\nFailed to label {failed_labels + failed_verification} sentences.")
     print(f"Successfully labeled {successful_labels} sentences")
