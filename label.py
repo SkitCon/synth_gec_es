@@ -19,6 +19,7 @@ import re
 import time
 import json
 import argparse
+import warnings
 from pathlib import Path
 import numpy as np
 import traceback
@@ -27,7 +28,8 @@ from bs4 import BeautifulSoup
 from transformers import BertTokenizer
 from unidecode import unidecode
 
-from utils.utils import load_morpho_dict, load_vocab, get_path, get_new_path, create_vocab_index, apply_labels, mutate, CONTEXT_WINDOW, process_lemma, load_modified_nlp, restore_nlp, clean_text
+
+from utils.utils import load_morpho_dict, load_vocab, get_path, get_new_path, create_vocab_index, apply_labels, mutate, CONTEXT_WINDOW, process_lemma, load_modified_nlp, restore_nlp, clean_text, parallelize_function
 
 from utils.custom_errors import FailedToMeetStrictRequirementException
 
@@ -416,9 +418,52 @@ def label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose=
     labels = '\t'.join([' '.join(cur_labels) for cur_labels in labels])
     return labels
 
-def main(input_file, output_file, lemma_to_morph, vocab, verify=False, verbose=False, silence_warnings=False, strict=False):
+def label_sentence_error_wrapper(sentence_pair, lemma_to_morph, vocab_index, verbose=False, silence_warnings=False, strict=False):
+    global nlp
+    errorful = sentence_pair[0]
+    correct = sentence_pair[1]
+    try:
+        return label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose, silence_warnings, strict)
+    except FailedToMeetStrictRequirementException as e:
+        if not silence_warnings:
+            print(f"Failed to generate labels due to strict requirements: {e}\n\tErrorful sentence: {errorful}\n\tCorrect sentence: {correct}")
+        return ""
+    except Exception as e:
+        if not silence_warnings:
+            print(f"Failed to generate labels due to {e}\n\tErrorful sentence: {errorful}\n\tCorrect sentence: {correct}")
+            print(traceback.format_exc())
+        return ""
+    
+def apply_labels_error_wrapper(sentence_label, lemma_to_morph, vocab, verbose=False, silence_warnings=False):
 
-    nlp = load_modified_nlp()
+    # Ok, I really don't like this as it requires this function to be declared in the file where nlp is loaded, but I need
+    # it because the nlp object is unpickleable, so it can't be an argument in a function passed to pool.map
+    global nlp
+
+    errorful_sentence = sentence_label[0]
+    labels = sentence_label[1]
+
+    try:
+        tokenized_errorful_sentence = nlp(errorful_sentence)
+        if verbose:
+            print(f"=================================\nVerifying sentence: {errorful_sentence}\nTokenization: {tokenized_errorful_sentence}")
+        decoded_sentence = apply_labels(tokenized_errorful_sentence, labels.split('\t'), lemma_to_morph, vocab, nlp)
+    except KeyError as e:
+        if not silence_warnings:
+            print(f"VERIFY FAILED!!!\n\tCaused by KeyError: {e}\n\tReport:\n\tErrorful Sentence:{errorful_sentence}\n\tGenerated Labels:{labels}")
+        return ""
+    except IndexError as e:
+        if not silence_warnings:
+            print(f"VERIFY FAILED!!!\n\tCaused by IndexError: {e}\n\tReport:\n\tErrorful Sentence:{errorful_sentence}\n\tGenerated Labels:{labels}")
+            print(traceback.format_exc())
+        return ""
+    return decoded_sentence
+
+def main(input_file, output_file, lemma_to_morph, vocab, spacy_model="es_dep_news_trf", tokenizer_model="dccuchile/bert-base-spanish-wwm-cased",
+         verify=False, verbose=False, silence_warnings=False, strict=False, n_cores=1):
+
+    global nlp
+    nlp = load_modified_nlp(model_path=spacy_model, tokenizer_path=tokenizer_model)
     vocab_index = create_vocab_index(vocab)
 
     start_time = time.time()
@@ -428,65 +473,65 @@ def main(input_file, output_file, lemma_to_morph, vocab, verify=False, verbose=F
         sentence_pairs = [(clean_text(lines[i]), clean_text(lines[i+1])) for i in range(0, len(lines), 3)]
 
         labels = []
-        for i, sentences in enumerate(sentence_pairs):
-            if i in list(range(100, len(sentence_pairs), 100)):
+        if n_cores == 1:
+            for i, sentences in enumerate(sentence_pairs):
+                if i in list(range(100, len(sentence_pairs), 100)):
+                    cur_time = time.time()
+                    print(f"===================================\nProgress Report:\n{round(i / len(sentence_pairs) * 100, 1)}% done.\nFailed to generate labels for {failed_labels} sentences out of {i}.\nAverage time to label one sentence: {round((cur_time - start_time) / i, 3)} seconds")
+                try:
+                    cur_labels = label_sentence(sentences[0], sentences[1], lemma_to_morph, vocab_index, nlp, verbose=verbose, silence_warnings=silence_warnings, strict=strict)
+                    labels.append(cur_labels)
+                except FailedToMeetStrictRequirementException as e:
+                    if not silence_warnings:
+                        print(f"Failed to generate labels due to strict requirements: {e}\n\tErrorful sentence: {sentences[0]}\n\tCorrect sentence: {sentences[1]}")
+                    failed_labels += 1
+                    labels.append("")
+                except Exception as e:
+                    if not silence_warnings:
+                        print(f"Failed to generate labels due to {e}\n\tErrorful sentence: {sentences[0]}\n\tCorrect sentence: {sentences[1]}")
+                        print(traceback.format_exc())
+                    failed_labels += 1
+                    labels.append("")
+        else:
+            for i in range(0, len(sentence_pairs), n_cores):
+                start_time = time.time()
+                slice = sentence_pairs[i:min(i+n_cores, len(sentence_pairs)-1)]
+                new_labels = parallelize_function(slice, label_sentence_error_wrapper, n_cores, kwargs={"lemma_to_morph":lemma_to_morph, "vocab_index":vocab_index,
+                                                                                                        "verbose":verbose, "silence_warnings":silence_warnings, "strict":strict})
+                labels += new_labels
+                failed_labels += len([label for label in new_labels if len(label) == 0])
                 cur_time = time.time()
-                print(f"===================================\nProgress Report:\n{round(i / len(sentence_pairs) * 100, 1)}% done.\nFailed to generate labels for {failed_labels} sentences out of {i}.\nAverage time to label one sentence: {round((cur_time - start_time) / i, 3)} seconds")
-            try:
-                cur_labels = label_sentence(sentences[0], sentences[1], lemma_to_morph, vocab_index, nlp, verbose=verbose, silence_warnings=silence_warnings, strict=strict)
-                labels.append(cur_labels)
-            except FailedToMeetStrictRequirementException as e:
-                if not silence_warnings:
-                    print(f"Failed to generate labels due to strict requirements: {e}\n\tErrorful sentence: {sentences[0]}\n\tCorrect sentence: {sentences[1]}")
-                failed_labels += 1
-                labels.append([])
-            except Exception as e:
-                if not silence_warnings:
-                    print(f"Failed to generate labels due to {e}\n\tErrorful sentence: {sentences[0]}\n\tCorrect sentence: {sentences[1]}")
-                    print(traceback.format_exc())
-                failed_labels += 1
-                labels.append([])
+                print(f"===================================\nCompleted labeling for {len(new_labels)} sentences in {round(cur_time - start_time, 2)} seconds.\n{len([label for label in new_labels if len(label) == 0])} could not be labeled.\nAverage {round((cur_time - start_time) / n_cores, 3)} seconds per sentence")
 
     start_time = time.time()
     successful_labels = 0
     failed_verification = 0
     with open(output_file, 'w') as f:
-        for i in range(len(sentence_pairs)):
-            errorful_sentence = sentence_pairs[i][0]
-            correct_sentence = sentence_pairs[i][1]
-            token_labels = labels[i]
+        for i in range(0, len(sentence_pairs), n_cores):
+            slice_sentences = sentence_pairs[i:min(i+n_cores, len(sentence_pairs)-1)]
+            slice_labels = labels[i:min(i+n_cores, len(sentence_pairs)-1)]
 
-            if len(token_labels) == 0: # Failed labels
-                continue
-
+            failed_this_round = 0
             if verify:
-                if i in list(range(100, len(sentence_pairs), 100)):
-                    cur_time = time.time()
-                    print(f"===================================\nProgress Report on Verification:\n{round(i / len(sentence_pairs) * 100, 1)}% done.\n{failed_verification} sentences failed verification out of {i}.\nAverage time to verify one sentence: {round((cur_time - start_time) / i, 3)} seconds")
-                try:
-                    tokenized_errorful_sentence = nlp(errorful_sentence)
-                    if verbose:
-                        print(f"=================================\nVerifying sentence: {errorful_sentence}\nTokenization: {tokenized_errorful_sentence}")
-                    decoded_sentence = apply_labels(tokenized_errorful_sentence, token_labels.split('\t'), lemma_to_morph, vocab, nlp)
-                except KeyError as e:
-                    if not silence_warnings:
-                        print(f"VERIFY FAILED!!!\n\tCaused by KeyError: {e}\n\tReport:\n\tErrorful Sentence:{errorful_sentence}\n\tGenerated Labels:{token_labels}\n\tTarget:{correct_sentence}")
-                    failed_verification += 1
+                print(f"===================================\nVerifying {len(slice_labels)} labels...")
+                start_time = time.time()
+                decoded_sentences = parallelize_function(zip(list(zip(*slice_sentences))[0], slice_labels), apply_labels_error_wrapper, n_cores, kwargs={"lemma_to_morph":lemma_to_morph, "vocab":vocab,
+                                                                                                                                                   "verbose":verbose, "silence_warnings":silence_warnings})
+            for j in range(len(slice_sentences)):
+                if verify and slice_sentences[j][1] != decoded_sentences[j]:
+                    if slice_labels[j] != "": # No need to warn if this sentence already failed labeling
+                        if not silence_warnings:
+                            print(f"VERIFY FAILED!\nReport:\n\tErrorful Sentence:{slice_sentences[j][0]}\n\tGenerated Labels:{slice_labels[j]}\n\tTarget:{slice_sentences[j][1]}\n\tResult from Decode:{decoded_sentences[j]}")
+                        failed_this_round += 1
+                        failed_verification += 1
                     continue
-                except IndexError as e:
-                    if not silence_warnings:
-                        print(f"VERIFY FAILED!!!\n\tCaused by IndexError: {e}\n\tReport:\n\tErrorful Sentence:{errorful_sentence}\n\tGenerated Labels:{token_labels}\n\tTarget:{correct_sentence}")
-                        print(traceback.format_exc())
-                    failed_verification += 1
-                    continue
-                if decoded_sentence != correct_sentence:
-                    if not silence_warnings:
-                        print(f"VERIFY FAILED!\nReport:\n\tErrorful Sentence:{errorful_sentence}\n\tGenerated Labels:{token_labels}\n\tTarget:{correct_sentence}\n\tResult from Decode:{decoded_sentence}")
-                    failed_verification += 1
-                    continue
+                else:
+                    f.write(f"{slice_sentences[j][0]}\n{slice_labels[j]}\n{slice_sentences[j][1]}\n\n")
+                    successful_labels += 1
+            cur_time = time.time()
+            if verify:
+                print(f"Completed verification for {len(decoded_sentences)} sentences in {round(cur_time - start_time, 2)} seconds.\n{failed_this_round} sentences failed verification.\nAverage {round((cur_time - start_time) / n_cores, 3)} seconds per sentence") 
             
-            f.write(f"{errorful_sentence}\n{token_labels}\n{correct_sentence}\n\n")
-            successful_labels += 1
     print(f"Failed to label {failed_labels + failed_verification} sentences.")
     print(f"Successfully labeled {successful_labels} sentences")
 
@@ -497,11 +542,19 @@ def main(input_file, output_file, lemma_to_morph, vocab, verify=False, verbose=F
         json.dump(lemma_to_morph, f)
 
 if __name__ == "__main__":
+
+    warnings.filterwarnings("ignore")
+
     parser = argparse.ArgumentParser()
     parser.add_argument("input_file", help="path to a file with sentences in Spanish on each line")
     parser.add_argument("output_file", help="output path")
     parser.add_argument("--dict_file", default="lang_def/morpho_dict_updated.json", help="path to the dictionary file which supplies different morphological forms for a word")
     parser.add_argument("--vocab_file", default="lang_def/vocab.txt", help="path to the vocab file containing all words in your model's vocabulary")
+    parser.add_argument("--spacy_model", default="es_dep_news_trf", help="spaCy model to use")
+    parser.add_argument("--tokenizer_model", default="dccuchile/bert-base-spanish-wwm-cased", help="Tokenizer model to use (local or HuggingFace path)")
+
+    parser.add_argument("--n_cores", default=1, type=int, help="Number of cores to use (1 for no multi-processing)")
+    
     parser.add_argument("--verify",
                         help="generated token labels will be verified as correct by running the decode algorithm",
                         action="store_true")
@@ -523,5 +576,5 @@ if __name__ == "__main__":
     else:
         output_file = args.output_file
 
-    main(args.input_file, output_file, load_morpho_dict(args.dict_file), load_vocab(args.vocab_file),
-         verify=args.verify, verbose=args.verbose, silence_warnings=args.silence_warnings, strict=args.strict)
+    main(args.input_file, output_file, load_morpho_dict(args.dict_file), load_vocab(args.vocab_file), spacy_model=args.spacy_model, tokenizer_model=args.tokenizer_model,
+         verify=args.verify, verbose=args.verbose, silence_warnings=args.silence_warnings, strict=args.strict, n_cores=args.n_cores)

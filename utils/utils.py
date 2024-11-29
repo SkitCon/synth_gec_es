@@ -6,11 +6,15 @@ Purpose: Contains a variety of functions for use in generating synthetic errorfu
 '''
 import json
 import re
+import traceback
 from bs4 import BeautifulSoup
 import spacy
 from spacy.tokens import Doc
 from transformers import AutoTokenizer
 from unidecode import unidecode
+
+from multiprocessing import Pool
+from functools import partial
 
 from utils.custom_errors import InvalidLabelException
 from utils.custom_errors import NotInDictionaryException
@@ -88,6 +92,11 @@ UPOS_TO_SIMPLE = {"ADJ": "ADJ",
                   "SPACE": "X",
                   "X": "X"}
 
+def parallelize_function(arr, func, n_cores, kwargs={}):
+    with Pool(n_cores) as pool:
+        res = pool.map(partial(func, **kwargs), arr)
+    return res
+
 def load_vocab(filename):
     with open(filename, 'r') as f:
         return [token.strip() for token in f]
@@ -109,7 +118,7 @@ def create_vocab_index(vocab):
     return {word: i for i, word in enumerate(vocab)}
 
 def load_modified_nlp(model_path="es_dep_news_trf", tokenizer_path="dccuchile/bert-base-spanish-wwm-cased"):
-    nlp = spacy.load(model_path)
+    nlp = spacy.load(model_path, disable=["parser", "ner", "entity_linker", "entity_ruler", "textcat", "textcat_multilabel"])
     custom_tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
     nlp.tokenizer = lambda text: Doc(nlp.vocab, words=custom_tokenizer.tokenize(text))
     return nlp
@@ -199,15 +208,6 @@ def follow_path(dictionary, path):
             return follow_path(new_dict, path)
         else: # Too deep to resolve, go back up until back at the beginning of the path
             raise KeyError(str(e).strip("'"))
-
-{"NOUN": ["NOUN", "SING", "MASC", "SURFACE_FORM"],
-                         "ADJ": ["ADJ", "SING", "MASC", "SURFACE_FORM"],
-                         "ADV": ["ADV", "SING", "MASC", "SURFACE_FORM"],
-                         "PRONOUN": ["PRONOUN", "SING", "MASC", "NOM", "SURFACE_FORM"],
-                         "PERSONAL_PRONOUN": ["PERSONAL_PRONOUN", "SING", "MASC", "NOM", "BASE", "NO", "SURFACE_FORM"],
-                         "ARTICLE": ["ARTICLE", "SING", "MASC", "DEF", "SURFACE_FORM"],
-                         "VERB": ["VERB", "SING", "IND", "PRES", "3", "SURFACE_FORM"],
-                         "X": ["X", "SURFACE_FORM"]}
 
 def get_path(token):
     '''

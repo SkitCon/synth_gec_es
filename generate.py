@@ -7,12 +7,14 @@ Purpose: This script generates synthetic errorful sentences from well-formed Spa
 import re
 import random
 import json
+import time
 import argparse
+import warnings
 import traceback
 from pathlib import Path
 import spacy
 
-from utils.utils import load_morpho_dict, load_vocab, create_vocab_index, get_path, follow_path, apply_labels, mutate, clean_text
+from utils.utils import load_morpho_dict, load_vocab, create_vocab_index, get_path, follow_path, apply_labels, mutate, clean_text, load_modified_nlp, parallelize_function
 from label import label_sentence
 
 from utils.utils import UPOS_TO_SIMPLE, AVAILABLE_TYPES, HIERARCHY_DEF, DEFAULT_PATH_FOR_POS
@@ -269,85 +271,153 @@ def apply_error(error, sentence, lemma_to_morph, vocab, nlp, verbose=False):
         print(f"New sentence: {' '.join([str(token) for token in new_sentence])}")
     return nlp(' '.join([str(token) for token in new_sentence])) # Re-apply nlp with change
 
-def generate_errorful_sentences(input_file, output_file, errors,
-                                lemma_to_morph, vocab,
-                                min_error=0, max_error=3, num_sentences=1,
-                                include_token_labels=True, verify=False, verbose=False,
-                                silence_warnings=False, strict=False):
-    '''
-    '''
-    nlp = spacy.load("es_dep_news_trf")
+def label_sentence_error_wrapper(sentence_pair, lemma_to_morph, vocab_index, verbose=False, silence_warnings=False, strict=False):
+    global nlp
+    errorful = sentence_pair[0]
+    correct = sentence_pair[1]
+    try:
+        return label_sentence(errorful, correct, lemma_to_morph, vocab_index, nlp, verbose, silence_warnings, strict)
+    except FailedToMeetStrictRequirementException as e:
+        if not silence_warnings:
+            print(f"Failed to generate labels due to strict requirements: {e}\n\tErrorful sentence: {errorful}\n\tCorrect sentence: {correct}")
+        return ""
+    except Exception as e:
+        if not silence_warnings:
+            print(f"Failed to generate labels due to {e}\n\tErrorful sentence: {errorful}\n\tCorrect sentence: {correct}")
+            print(traceback.format_exc())
+        return ""
+    
+def apply_labels_error_wrapper(sentence_label, lemma_to_morph, vocab, verbose=False, silence_warnings=False):
+
+    # Ok, I really don't like this as it requires this function to be declared in the file where nlp is loaded, but I need
+    # it because the nlp object is unpickleable, so it can't be an argument in a function passed to pool.map
+    global nlp
+
+    errorful_sentence = sentence_label[0]
+    labels = sentence_label[1]
+
+    try:
+        tokenized_errorful_sentence = nlp(errorful_sentence)
+        if verbose:
+            print(f"=================================\nVerifying sentence: {errorful_sentence}\nTokenization: {tokenized_errorful_sentence}")
+        decoded_sentence = apply_labels(tokenized_errorful_sentence, labels.split('\t'), lemma_to_morph, vocab, nlp)
+    except KeyError as e:
+        if not silence_warnings:
+            print(f"VERIFY FAILED!!!\n\tCaused by KeyError: {e}\n\tReport:\n\tErrorful Sentence:{errorful_sentence}\n\tGenerated Labels:{labels}")
+        return ""
+    except IndexError as e:
+        if not silence_warnings:
+            print(f"VERIFY FAILED!!!\n\tCaused by IndexError: {e}\n\tReport:\n\tErrorful Sentence:{errorful_sentence}\n\tGenerated Labels:{labels}")
+            print(traceback.format_exc())
+        return ""
+    return decoded_sentence
+
+def generate_errorful_sentences(correct_sentence, errors, lemma_to_morph, vocab_only_words, min_error=0, max_error=3, num_sentences=1, verbose=False):
+    global nlp
+
+    if re.sub(r"\s", '', correct_sentence) == "": # Empty line
+        return []
+    
+    correct_sentence = nlp(clean_text(correct_sentence))
+
+    sentence_pairs = []
+    if verbose:
+        print(f"=========================\nBeginning error generation for sentence: {correct_sentence}")
+    for _ in range(num_sentences):
+        num_errors = random.randint(min_error, max_error)
+        cur_sentence = [token for token in correct_sentence] # Convert to list of tokens
+        if verbose:
+            print(f"--------------------\nGeneratng errorful sentence with {num_errors} errors.")
+        for _ in range(num_errors):
+            choices = []
+            for i, error in enumerate(errors):
+                if can_apply(error, cur_sentence):
+                    choices += [i] * error["weight"]
+            new_sentence = apply_error(errors[random.choice(choices)], cur_sentence, lemma_to_morph, vocab_only_words, nlp, verbose=verbose)
+            cur_sentence = [token for token in new_sentence] # Update sentence
+        sentence_pairs.append((token_list_to_str(cur_sentence), token_list_to_str(correct_sentence)))
+    return sentence_pairs
+    
+def main(input_file, output_file, errors,
+         lemma_to_morph, vocab, spacy_model="es_dep_news_trf", tokenizer_model="dccuchile/bert-base-spanish-wwm-cased",
+         min_error=0, max_error=3, num_sentences=1,
+         include_token_labels=True, verify=False, verbose=False,
+         silence_warnings=False, strict=False, n_cores=1):
+    
+    global nlp
+    nlp = load_modified_nlp(model_path=spacy_model, tokenizer_path=tokenizer_model)
     vocab_index = create_vocab_index(vocab)
 
     # Create list of words in the vocabulary that are not special tokens or morphological parts
     vocab_only_words = [word for word in vocab if not re.match(r"^(\[.*\])|(#.*)$", word)]
 
-    errorful_sentences = []
+    sentence_pairs = []
     with open(input_file, 'r') as f:
-        for line in f:
-            if re.sub(r"\s", '', line) == "": # Empty line
-                continue
-            sentence = nlp(clean_text(line))
-            if verbose:
-                print(f"=========================\nBeginning error generation for sentence: {sentence}")
-            for _ in range(num_sentences):
-                num_errors = random.randint(min_error, max_error)
-                cur_sentence = [token for token in sentence] # Convert to list of tokens
-                if verbose:
-                    print(f"--------------------\nGeneratng errorful sentence with {num_errors} errors.")
-                for _ in range(num_errors):
-                    choices = []
-                    for i, error in enumerate(errors):
-                        if can_apply(error, cur_sentence):
-                            choices += [i] * error["weight"]
-                    new_sentence = apply_error(errors[random.choice(choices)], cur_sentence, lemma_to_morph, vocab_only_words, nlp, verbose=verbose)
-                    cur_sentence = [token for token in new_sentence] # Update sentence
-                
-                errorful_sentences.append((token_list_to_str(cur_sentence), token_list_to_str(sentence)))
+        lines = f.readlines()
+        sentences = [lines[i] for i in range(0, len(lines), 2)]
+        for i in range(0, len(sentences), n_cores):
+
+            slice = sentences[i:min(i+n_cores, len(sentences)-1)]
+
+            print(f"================================\nGenerating {len(slice)*num_sentences} errorful sentences from {len(slice)} correct sentences...")
+            start_time = time.time()
+            sentence_pair_groups = parallelize_function(slice, generate_errorful_sentences, n_cores,
+                                                        kwargs={"errors":errors, "lemma_to_morph":lemma_to_morph, "vocab_only_words":vocab_only_words,
+                                                                "min_error":min_error, "max_error":max_error, "num_sentences":num_sentences, "verbose":verbose})
+            cur_sentence_pairs = [sentence_pair for group in sentence_pair_groups for sentence_pair in group]
+            sentence_pairs += cur_sentence_pairs
+            cur_time = time.time()
+            print(f"Succesfully generated {len(cur_sentence_pairs)} errorful sentences in {round(cur_time-start_time, 2)} seconds.\nAverage time per sentence: {round((cur_time-start_time) / len(cur_sentence_pairs), 3)}")
 
     included_sentences = 0
     excluded_sentences = 0
     with open(output_file, 'w') as f:
-        for sentence in errorful_sentences:
+        for i in range(0, len(sentence_pairs), n_cores):
+
+            slice = sentence_pairs[i:min(i+n_cores, len(sentence_pairs)-1)]
+
             if include_token_labels:
-                try:
-                    token_labels = label_sentence(sentence[0], sentence[1], lemma_to_morph, vocab_index, nlp, verbose=verbose,
-                                                  silence_warnings=silence_warnings, strict=strict)
-                except FailedToMeetStrictRequirementException as e:
-                    if not silence_warnings:
-                        print(f"{e}\nDue to strict requirement, sentence is excluded.")
-                    excluded_sentences += 1
-                    continue
-                except Exception as e:
-                    if not silence_warnings:
-                        print(f"LABEL GENERATION FAILED!\n\t{e} while generating sentence. Not including sentence in output file.")
-                        print(traceback.format_exc())
-                    excluded_sentences += 1
-                    continue
-                
+                print(f"================================\nGenerating labels for {len(slice)} sentences...")
+                start_time = time.time()
+                labels = parallelize_function(slice, label_sentence_error_wrapper, n_cores, kwargs={"lemma_to_morph":lemma_to_morph, "vocab_index":vocab_index,
+                                                                                                    "verbose":verbose, "silence_warnings":silence_warnings, "strict":strict})
+                excluded_sentences += len([label for label in labels if len(label) == 0])
+                cur_time = time.time()
+                print(f"Completed labeling for {len(labels)} sentences in {round(cur_time - start_time, 2)} seconds.\n{len([label for label in labels if len(label) == 0])} could not be labeled.\nAverage {round((cur_time - start_time) / n_cores, 3)} seconds per sentence")
+
                 if verify:
-                    try:
-                        decoded_sentence = apply_labels(nlp(sentence[0]), token_labels.split('\t'), lemma_to_morph, vocab, nlp)
-                    except Exception as e:
-                        if not silence_warnings:
-                            print(f"VERIFY FAILED!\n\t{e} while decoding sentence. Not including sentence in output file.")
-                            print(traceback.format_exc())
-                        excluded_sentences += 1
+                    print(f"===================================\nVerifying {len(labels)} labels...")
+                    start_time = time.time()
+                    decoded_sentences = parallelize_function(zip(list(zip(*slice))[0], labels), apply_labels_error_wrapper, n_cores, kwargs={"lemma_to_morph":lemma_to_morph, "vocab":vocab,
+                                                                                                                                             "verbose":verbose, "silence_warnings":silence_warnings})
+                
+                failed_verification = 0
+                for j in range(len(slice)):
+                    if verify and slice[j][1] != decoded_sentences[j]:
+                        if labels[j] != "": # No need to warn if this sentence already failed labeling
+                            if not silence_warnings:
+                                print(f"VERIFY FAILED!\nReport:\n\tErrorful Sentence:{slice[j][0]}\n\tGenerated Labels:{labels[j]}\n\tTarget:{slice[j][1]}\n\tResult from Decode:{decoded_sentences[j]}")
+                            failed_verification += 1
+                            excluded_sentences += 1
                         continue
-                    if decoded_sentence != sentence[1]:
-                        if not silence_warnings:
-                            print(f"VERIFY FAILED!\nReport:\n\tErrorful Sentence: {sentence[0]}\n\tGenerated Labels: {token_labels}\n\tTarget: {sentence[1]}\n\tResult from Decode: {decoded_sentence}")
-                        excluded_sentences += 1
-                        continue
-            f.write(sentence[0] + '\n')
-            if include_token_labels:
-                f.write(token_labels + '\n')
-            f.write(sentence[1] + "\n\n")
-            included_sentences += 1
+                    else:
+                        f.write(f"{slice[j][0]}\n{labels[j]}\n{slice[j][1]}\n\n")
+                        included_sentences += 1
+                cur_time = time.time()
+                if verify:
+                    print(f"Completed verification for {len(decoded_sentences)} sentences in {round(cur_time - start_time, 2)} seconds.\n{failed_verification} sentences failed verification.\nAverage {round((cur_time - start_time) / n_cores, 3)} seconds per sentence")
+            else:
+                for j in range(len(slice)):
+                    f.write(f"{slice[j][0]}\n{slice[j][1]}\n\n")
+                    included_sentences += 1
+
     print(f"Excluded {excluded_sentences} sentences.")
     print(f"Saved {included_sentences} sentences.")
     
 if __name__ == "__main__":
+
+    warnings.filterwarnings("ignore")
+
     parser = argparse.ArgumentParser()
     parser.add_argument("input_file", help="path to a file with sentences in Spanish on each line")
     parser.add_argument("output_file", help="output path")
@@ -357,7 +427,10 @@ if __name__ == "__main__":
 
     parser.add_argument("--dict_file", default="lang_def/morpho_dict_updated.json", help="path to the dictionary file which supplies different morphological forms for a word")
     parser.add_argument("--vocab_file", default="lang_def/vocab.txt", help="path to the vocab file containing all words in your model's vocabulary")
+    parser.add_argument("--spacy_model", default="es_dep_news_trf", help="spaCy model to use")
+    parser.add_argument("--tokenizer_model", default="dccuchile/bert-base-spanish-wwm-cased", help="Tokenizer model to use (local or HuggingFace path)")
 
+    parser.add_argument("--n_cores", default=1, type=int, help="Number of cores to use (1 for no multi-processing)")
     parser.add_argument("--seed", default=42, type=int, help="Seed for random error generation")
 
     parser.add_argument("-n", "--num_sentences", type=int, default=1, help="the number of errorful sentences that will be generated from each correct sentence in the supplied corpus. By default 1")
@@ -390,8 +463,8 @@ if __name__ == "__main__":
 
     random.seed(args.seed)
 
-    generate_errorful_sentences(input_file, output_file, errors,
-                                load_morpho_dict(args.dict_file), load_vocab(args.vocab_file),
-                                min_error=args.min_error, max_error=args.max_error, num_sentences=args.num_sentences,
-                                include_token_labels=args.token, verify=args.verify, verbose=args.verbose,
-                                silence_warnings=args.silence_warnings, strict=args.strict)
+    main(input_file, output_file, errors, load_morpho_dict(args.dict_file), load_vocab(args.vocab_file),
+         spacy_model=args.spacy_model, tokenizer_model=args.tokenizer_model,
+         min_error=args.min_error, max_error=args.max_error, num_sentences=args.num_sentences,
+         include_token_labels=args.token, verify=args.verify, verbose=args.verbose,
+         silence_warnings=args.silence_warnings, strict=args.strict, n_cores=args.n_cores)

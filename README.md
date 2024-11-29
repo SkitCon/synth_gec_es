@@ -2,7 +2,7 @@
 [![en](https://img.shields.io/badge/lang-en-red.svg)](README.md)
 [![es](https://img.shields.io/badge/lang-es-yellow.svg)](README-es.md)
 
-**version 0.5.3**
+**version 0.6.1**
 
 SYNTHetic Grammatical Error Correction for Spanish (ES) is a system for generating synthetic GEC data for common Spanish grammatical errors to train a GEC model.
 
@@ -17,6 +17,7 @@ bs4 == 0.0.2
 spacy == 3.7.6
 unidecode == 1.3
 transformers == 4.31.0
+torch==2.4.1
 ```
 
 ## Table of Contents
@@ -30,14 +31,14 @@ transformers == 4.31.0
 
 ## Scripts
 
-Note: If using the same file organization as the repo (i.e. if you cloned this repo), do not worry about the --dict_file or --vocab_file args.
+Note: If using the same file organization as the repo (i.e. if you cloned this repo), do not worry about the --dict_file, --vocab_file, --spacy_model, or --tokenizer_model args.
 
 ### generate.py
 
 The main script is generate.py. This script can be ran as:
 
 ```
-python generate.py INPUT_FILE OUTPUT_FILE ERROR_FILE_1 ERROR_FILE_2 ... ERROR_FILE_N [--min/-min_error] [minimum number of errors in a sentence] [-max/--max_error] [maximum number of errors in a sentence] [-d/--dict_file] [dictionary file] [--vocab_file] [vocab file] [--seed] [seed] [-n/--num-sentences] [number of sentences to generate for each original] [-t/--token] [--verify] [-v/--verbose] [-sw/--silence_warnings] [--strict]
+python generate.py INPUT_FILE OUTPUT_FILE ERROR_FILE_1 ERROR_FILE_2 ... ERROR_FILE_N [--min/-min_error] [minimum number of errors in a sentence] [-max/--max_error] [maximum number of errors in a sentence] [-d/--dict_file] [dictionary file] [--vocab_file] [vocab file] [--spacy_model] [spaCy model name] [--tokenizer_model] [tokenizer model path] [--seed] [seed] [-n/--num-sentences] [number of sentences to generate for each original] [--n_cores] [number of cores to use] [-t/--token] [--verify] [-v/--verbose] [-sw/--silence_warnings] [--strict]
 ```
 
 This script generates synthetic errorful sentences from well-formed Spanish sentences in a corpus.
@@ -49,11 +50,14 @@ This script generates synthetic errorful sentences from well-formed Spanish sent
 * max_error is the maximum number of errors to be generated for a sentence
 * --dict_file is the path to the dictionary file which supplies different morphological forms for a word
 * --vocab_file is the path to the vocab file containing all words in your model's vocabulary
+* --spacy_model is the spaCy model to use for tagging and morphology
+* --tokenizer_model is the tokenizer model to use (either local or HuggingFace path)
 * --seed is the seed for random generation
 * --num-sentences is the number of errorful sentences that will be generated from each correct sentence in the supplied corpus. By default 1, but you can set it higher to generate more errorful sentences from one sentence with difference errors.
+* --n_cores specifies the number of cores to use. If 1 (default), no multi-processing will be applied
 * --token means the output synthetic data will include token-level labels for the errorful sentence (discussed [below](#definitions)) for use in a token-level GEC system (as with GECToR)
 * --verify means the generated token labels will be verified using the decode algorithm to ensure that the result matches the correct sentence. Note that this will generally double the time to label, but guarantees that the labels are valid
-* --verbose means debugging code will print
+* --verbose means debugging code will print, NOT RECOMMENDED WITH MULTI-PROCESSING
 * --silence_warnings means warnings will not be printed, such as a mutation being replaced by a replace
 * --strict means the script will be strict about which sentences are included in the output file. This has the primary effect of excluding sentences where a MUTATE verification failed and a REPLACE had to be used to repair the labels.
 
@@ -62,7 +66,7 @@ This script generates synthetic errorful sentences from well-formed Spanish sent
 Ran as:
 
 ```
-python3 decode.py INPUT_FILE [OUTPUT_FILE] [-d/--dict_file] [dictionary file] [--vocab_file] [vocab file] [-sw/--silence_warnings]
+python3 decode.py INPUT_FILE [OUTPUT_FILE] [-d/--dict_file] [dictionary file] [--vocab_file] [vocab file] [--spacy_model] [spaCy model name] [--tokenizer_model] [tokenizer model path] [--n_cores] [number of cores to use] [-v/--verbose] [-sw/--silence_warnings]
 ```
 
 This script takes errorful sentences + token-level labels and decodes them into a corrected sentence.
@@ -71,6 +75,10 @@ This script takes errorful sentences + token-level labels and decodes them into 
 * output file is optional, defines the output path to place the parsed sentences in. If no output path is supplied, it is placed in the same directory as the input file w/ the name [input file name]_parsed.txt.
 * --dict_file is the path to the dictionary file which supplies different morphological forms for a word
 * --vocab_file is the path to the vocab file containing all words in your model's vocabulary
+* --spacy_model is the spaCy model to use for tagging and morphology
+* --tokenizer_model is the tokenizer model to use (either local or HuggingFace path)
+* --n_cores specifies the number of cores to use. If 1 (default), no multi-processing will be applied
+* --verbose means debugging code will print, NOT RECOMMENDED WITH MULTI-PROCESSING
 * --silence_warnings means warnings will not be printed, such as a mutation being replaced by a replace
 
 ### label.py
@@ -78,7 +86,7 @@ This script takes errorful sentences + token-level labels and decodes them into 
 Ran as:
 
 ```
-python3 label.py INPUT_FILE [OUTPUT_FILE] [-d/--dictionary-file] [dictionary file] [--vocab_file] [vocab file] [--verify] [-v/--verbose] [-sw/--silence_warnings] [--strict]
+python3 label.py INPUT_FILE [OUTPUT_FILE] [-d/--dictionary-file] [dictionary file] [--vocab_file] [vocab file] [--spacy_model] [spaCy model name] [--tokenizer_model] [tokenizer model path] [--n_cores] [number of cores to use] [--verify] [-v/--verbose] [-sw/--silence_warnings] [--strict]
 ```
 
 This script takes errorful sentences + target sentences and translates them into token-level edits using shortest edit distance.
@@ -87,8 +95,11 @@ This script takes errorful sentences + target sentences and translates them into
 * output file is optional, defines the output path to place the labeled sentences in. If no output path is supplied, it is placed in the same directory as the input file w/ the name [input file name]_labeled.txt.
 * --dictionary-file is the path to the dictionary file which supplies different morphological forms for a word
 * --vocab-file is the path to the vocab file containing all words in your model's vocabulary
+* --spacy_model is the spaCy model to use for tagging and morphology
+* --tokenizer_model is the tokenizer model to use (either local or HuggingFace path)
+* --n_cores specifies the number of cores to use. If 1 (default), no multi-processing will be applied
 * --verify means the generated token labels will be verified using the decode algorithm to ensure that the result matches the correct sentence. Note that this will generally double the time to label, but guarantees that the labels are valid
-* --verbose means debugging code will print
+* --verbose means debugging code will print, NOT RECOMMENDED WITH MULTI-PROCESSING
 * --silence_warnings means warnings will not be printed, such as a mutation being replaced by a replace
 * --strict means the script will be strict about which sentences are included in the output file. This has the primary effect of excluding sentences where a MUTATE verification failed and a REPLACE had to be used to repair the labels.
 
