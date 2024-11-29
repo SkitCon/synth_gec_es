@@ -519,7 +519,7 @@ def main(input_file, output_file, lemma_to_morph, vocab, spacy_model="es_dep_new
                                                                                                                                                    "verbose":verbose, "silence_warnings":silence_warnings})
             for j in range(len(slice_sentences)):
                 if verify and slice_sentences[j][1] != decoded_sentences[j]:
-                    if slice_labels[j] != "": # No need to warn if this sentence already failed labeling
+                    if slice_labels[j] != "" and decoded_sentences[j] != "": # No need to warn if this sentence already failed labeling or errored during apply_labels
                         if not silence_warnings:
                             print(f"VERIFY FAILED!\nReport:\n\tErrorful Sentence:{slice_sentences[j][0]}\n\tGenerated Labels:{slice_labels[j]}\n\tTarget:{slice_sentences[j][1]}\n\tResult from Decode:{decoded_sentences[j]}")
                         failed_this_round += 1
@@ -532,7 +532,7 @@ def main(input_file, output_file, lemma_to_morph, vocab, spacy_model="es_dep_new
             if verify:
                 print(f"Completed verification for {len(decoded_sentences)} sentences in {round(cur_time - start_time, 2)} seconds.\n{failed_this_round} sentences failed verification.\nAverage {round((cur_time - start_time) / n_cores, 3)} seconds per sentence") 
             
-    print(f"Failed to label {failed_labels + failed_verification} sentences.")
+    print(f"===============================\nFailed to label {failed_labels + failed_verification} sentences.")
     print(f"Successfully labeled {successful_labels} sentences")
 
     new_dict_path = "lang_def/morpho_dict_updated.json"
@@ -554,7 +554,7 @@ if __name__ == "__main__":
     parser.add_argument("--tokenizer_model", default="dccuchile/bert-base-spanish-wwm-cased", help="Tokenizer model to use (local or HuggingFace path)")
 
     parser.add_argument("--n_cores", default=1, type=int, help="Number of cores to use (1 for no multi-processing)")
-    
+
     parser.add_argument("--verify",
                         help="generated token labels will be verified as correct by running the decode algorithm",
                         action="store_true")

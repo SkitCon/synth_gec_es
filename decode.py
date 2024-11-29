@@ -4,6 +4,7 @@ Author: Amber Converse
 Purpose: This script takes errorful sentences + token-level labels and decodes them into a corrected sentence.
 '''
 
+import time
 import argparse
 import traceback
 import warnings
@@ -44,6 +45,7 @@ def correct_errorful_sentences(input_file, output_file, dict_file, vocab_file,
     vocab = load_vocab(vocab_file)
     lemma_to_morph = load_morpho_dict(dict_file)
 
+    failed_sentences = 0
     corrected_sentences = []
     with open(input_file, 'r') as f:
         lines = f.readlines()
@@ -51,14 +53,22 @@ def correct_errorful_sentences(input_file, output_file, dict_file, vocab_file,
 
         for i in range(0, len(pairs), n_cores):
             slice = pairs[i:i:min(i+n_cores, len(pairs)-1)]
+            print(f"===================================\nDecoding {len(slice)} sentences...")
 
+            start_time = time.time()
             candidate_sentences = parallelize_function(slice, apply_labels_error_wrapper, n_cores, kwargs={"lemma_to_morph":lemma_to_morph, "vocab":vocab,
                                                                                                            "verbose":verbose, "silence_warnings":silence_warnings})
             corrected_sentences += [sentence for sentence in candidate_sentences if sentence != ""]
+            cur_failed_sentences = len([sentence for sentence in candidate_sentences if sentence == ""])
+            failed_sentences += cur_failed_sentences
+            cur_time = time.time()
+            print(f"Successfully decoded {len(corrected_sentences)} in {round(cur_time-start_time, 2)} seconds.\nFailed to decode {cur_failed_sentences} sentences.\nAverage time per sentence: {round((cur_time-start_time) / len(slice), 3)}")
 
     with open(output_file, 'w') as f:
         for corrected_sentence in corrected_sentences:
             f.write(f"{corrected_sentence}\n\n")
+    
+    print(f"===============================\nFailed to decode {failed_sentences} sentences.\nSuccessfully decoded {len(corrected_sentences)} sentences.")
 
 if __name__ == "__main__":
 

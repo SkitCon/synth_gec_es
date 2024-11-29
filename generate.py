@@ -394,7 +394,7 @@ def main(input_file, output_file, errors,
                 failed_verification = 0
                 for j in range(len(slice)):
                     if verify and slice[j][1] != decoded_sentences[j]:
-                        if labels[j] != "": # No need to warn if this sentence already failed labeling
+                        if labels[j] != "" and decoded_sentences[j] != "": # No need to warn if this sentence already failed labeling or errored during apply_labels
                             if not silence_warnings:
                                 print(f"VERIFY FAILED!\nReport:\n\tErrorful Sentence:{slice[j][0]}\n\tGenerated Labels:{labels[j]}\n\tTarget:{slice[j][1]}\n\tResult from Decode:{decoded_sentences[j]}")
                             failed_verification += 1
@@ -411,7 +411,7 @@ def main(input_file, output_file, errors,
                     f.write(f"{slice[j][0]}\n{slice[j][1]}\n\n")
                     included_sentences += 1
 
-    print(f"Excluded {excluded_sentences} sentences.")
+    print(f"===============================\nExcluded {excluded_sentences} sentences.")
     print(f"Saved {included_sentences} sentences.")
     
 if __name__ == "__main__":
