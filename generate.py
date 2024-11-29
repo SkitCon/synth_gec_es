@@ -357,7 +357,7 @@ def main(input_file, output_file, errors,
         sentences = [lines[i] for i in range(0, len(lines), 2)]
         for i in range(0, len(sentences), n_cores):
 
-            slice = sentences[i:min(i+n_cores, len(sentences)-1)]
+            slice = sentences[i:min(i+n_cores, len(sentences))]
 
             print(f"================================\nGenerating {len(slice)*num_sentences} errorful sentences from {len(slice)} correct sentences...")
             start_time = time.time()
@@ -368,14 +368,14 @@ def main(input_file, output_file, errors,
             sentence_pairs += cur_sentence_pairs
             cur_time = time.time()
             print(f"Succesfully generated {len(cur_sentence_pairs)} errorful sentences in {round(cur_time-start_time, 2)} seconds.\nAverage time per sentence: {round((cur_time-start_time) / len(cur_sentence_pairs), 3)}")
-            print(f"{round(min(i+n_cores, len(sentences)-1) / len(sentences) * 100, 1)}% done.")
+            print(f"{round(min(i+n_cores, len(sentences)) / len(sentences) * 100, 1)}% done.")
 
     included_sentences = 0
     excluded_sentences = 0
     with open(output_file, 'w') as f:
         for i in range(0, len(sentence_pairs), n_cores):
 
-            slice = sentence_pairs[i:min(i+n_cores, len(sentence_pairs)-1)]
+            slice = sentence_pairs[i:min(i+n_cores, len(sentence_pairs))]
 
             if include_token_labels:
                 print(f"================================\nGenerating labels for {len(slice)} sentences...")
@@ -407,7 +407,7 @@ def main(input_file, output_file, errors,
                 cur_time = time.time()
                 if verify:
                     print(f"Completed verification for {len(decoded_sentences)} sentences in {round(cur_time - start_time, 2)} seconds.\n{failed_verification} sentences failed verification.\nAverage {round((cur_time - start_time) / n_cores, 3)} seconds per sentence")
-                    print(f"{round(min(i+n_cores, len(sentence_pairs)-1) / len(sentence_pairs) * 100, 1)}% done.")
+                    print(f"{round(min(i+n_cores, len(sentence_pairs)) / len(sentence_pairs) * 100, 1)}% done.")
             else:
                 for j in range(len(slice)):
                     f.write(f"{slice[j][0]}\n{slice[j][1]}\n\n")

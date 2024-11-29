@@ -93,6 +93,9 @@ UPOS_TO_SIMPLE = {"ADJ": "ADJ",
                   "X": "X"}
 
 def parallelize_function(arr, func, n_cores, kwargs={}):
+    # if n_cores == 1: # Handle non-parallelism
+    #     return [func(arr, **kwargs)]
+    
     with Pool(n_cores) as pool:
         res = pool.map(partial(func, **kwargs), arr)
     return res

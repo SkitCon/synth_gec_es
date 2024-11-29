@@ -473,44 +473,24 @@ def main(input_file, output_file, lemma_to_morph, vocab, spacy_model="es_dep_new
         sentence_pairs = [(clean_text(lines[i]), clean_text(lines[i+1])) for i in range(0, len(lines), 3)]
 
         labels = []
-        if n_cores == 1:
-            for i, sentences in enumerate(sentence_pairs):
-                if i in list(range(100, len(sentence_pairs), 100)):
-                    cur_time = time.time()
-                    print(f"===================================\nProgress Report:\n{round(i / len(sentence_pairs) * 100, 1)}% done.\nFailed to generate labels for {failed_labels} sentences out of {i}.\nAverage time to label one sentence: {round((cur_time - start_time) / i, 3)} seconds")
-                try:
-                    cur_labels = label_sentence(sentences[0], sentences[1], lemma_to_morph, vocab_index, nlp, verbose=verbose, silence_warnings=silence_warnings, strict=strict)
-                    labels.append(cur_labels)
-                except FailedToMeetStrictRequirementException as e:
-                    if not silence_warnings:
-                        print(f"Failed to generate labels due to strict requirements: {e}\n\tErrorful sentence: {sentences[0]}\n\tCorrect sentence: {sentences[1]}")
-                    failed_labels += 1
-                    labels.append("")
-                except Exception as e:
-                    if not silence_warnings:
-                        print(f"Failed to generate labels due to {e}\n\tErrorful sentence: {sentences[0]}\n\tCorrect sentence: {sentences[1]}")
-                        print(traceback.format_exc())
-                    failed_labels += 1
-                    labels.append("")
-        else:
-            for i in range(0, len(sentence_pairs), n_cores):
-                start_time = time.time()
-                slice = sentence_pairs[i:min(i+n_cores, len(sentence_pairs)-1)]
-                new_labels = parallelize_function(slice, label_sentence_error_wrapper, n_cores, kwargs={"lemma_to_morph":lemma_to_morph, "vocab_index":vocab_index,
-                                                                                                        "verbose":verbose, "silence_warnings":silence_warnings, "strict":strict})
-                labels += new_labels
-                failed_labels += len([label for label in new_labels if len(label) == 0])
-                cur_time = time.time()
-                print(f"===================================\nCompleted labeling for {len(new_labels)} sentences in {round(cur_time - start_time, 2)} seconds.\n{len([label for label in new_labels if len(label) == 0])} could not be labeled.\nAverage {round((cur_time - start_time) / n_cores, 3)} seconds per sentence")
-                print(f"{round(min(i+n_cores, len(sentence_pairs)-1) / len(sentence_pairs) * 100, 1)}% done.")
+        for i in range(0, len(sentence_pairs), n_cores):
+            start_time = time.time()
+            slice = sentence_pairs[i:min(i+n_cores, len(sentence_pairs))]
+            new_labels = parallelize_function(slice, label_sentence_error_wrapper, n_cores, kwargs={"lemma_to_morph":lemma_to_morph, "vocab_index":vocab_index,
+                                                                                                    "verbose":verbose, "silence_warnings":silence_warnings, "strict":strict})
+            labels += new_labels
+            failed_labels += len([label for label in new_labels if len(label) == 0])
+            cur_time = time.time()
+            print(f"===================================\nCompleted labeling for {len(new_labels)} sentences in {round(cur_time - start_time, 2)} seconds.\n{len([label for label in new_labels if len(label) == 0])} could not be labeled.\nAverage {round((cur_time - start_time) / n_cores, 3)} seconds per sentence")
+            print(f"{round(min(i+n_cores, len(sentence_pairs)-1) / len(sentence_pairs) * 100, 1)}% done.")
 
     start_time = time.time()
     successful_labels = 0
     failed_verification = 0
     with open(output_file, 'w') as f:
         for i in range(0, len(sentence_pairs), n_cores):
-            slice_sentences = sentence_pairs[i:min(i+n_cores, len(sentence_pairs)-1)]
-            slice_labels = labels[i:min(i+n_cores, len(sentence_pairs)-1)]
+            slice_sentences = sentence_pairs[i:min(i+n_cores, len(sentence_pairs))]
+            slice_labels = labels[i:min(i+n_cores, len(sentence_pairs))]
 
             failed_this_round = 0
             if verify:
@@ -529,8 +509,8 @@ def main(input_file, output_file, lemma_to_morph, vocab, spacy_model="es_dep_new
                 else:
                     f.write(f"{slice_sentences[j][0]}\n{slice_labels[j]}\n{slice_sentences[j][1]}\n\n")
                     successful_labels += 1
-            cur_time = time.time()
             if verify:
+                cur_time = time.time()
                 print(f"Completed verification for {len(decoded_sentences)} sentences in {round(cur_time - start_time, 2)} seconds.\n{failed_this_round} sentences failed verification.\nAverage {round((cur_time - start_time) / n_cores, 3)} seconds per sentence")
                 print(f"{round(min(i+n_cores, len(sentence_pairs)-1) / len(sentence_pairs) * 100, 1)}% done.")
             
