@@ -7,6 +7,7 @@ Purpose: Contains a variety of functions for use in generating synthetic errorfu
 import json
 import re
 import traceback
+import numpy as np
 from bs4 import BeautifulSoup
 import spacy
 from spacy.tokens import Doc
@@ -61,7 +62,6 @@ AVAILABLE_TYPES = {"POS": POS,
                    "PRONOUN_TYPE": PRONOUN_TYPES,
                    "REFLEXIVE": REFLEXIVE}
 
-
 HIERARCHY_DEF = {"POS": 0,
                     "NUMBER": 1,
                     "MOOD": [1,2],
@@ -92,10 +92,94 @@ UPOS_TO_SIMPLE = {"ADJ": "ADJ",
                   "SPACE": "X",
                   "X": "X"}
 
+# Define 2-way transformation between text-based transformations and vec representation
+name_to_index = {"KEEP": 0,
+                 "DELETE": 1,
+                 "ADD": 2,
+                 "COPY-REPLACE": 3,
+                 "COPY-ADD": 4,
+                 "MUTATE": 5,
+                 "REPLACE": 6}
+index_to_name = {val: key for key, val in name_to_index.items()}
+
+param_to_index = {"CAPITALIZE": 1,
+                  "POS-NOUN": 2,
+                  "POS-PRONOUN": 3,
+                  "POS-PERSONAL_PRONOUN": 4,
+                  "POS-VERB": 5,
+                  "POS-ARTICLE": 6,
+                  "POS-ADJ": 7,
+                  "POS-ADV": 8,
+                  "GENDER-MASC": 9,
+                  "GENDER-FEM": 10,
+                  "NUMBER-SING": 11,
+                  "NUMBER-PLUR": 12,
+                  "DEFINITE-DEF": 13,
+                  "DEFINITE-IND": 14,
+                  "CASE-NOM": 15,
+                  "CASE-ACC": 16,
+                  "CASE-DAT": 17,
+                  "PRONOUN_TYPE-BASE": 18,
+                  "PRONOUN_TYPE-CLITIC": 19,
+                  "REFLEXIVE-YES": 20,
+                  "REFLEXIVE-NO": 21,
+                  "PERSON-1": 22,
+                  "PERSON-2": 23,
+                  "PERSON-3": 24,
+                  "MOOD-IND": 25,
+                  "MOOD-SUB": 26,
+                  "MOOD-GER": 27,
+                  "MOOD-PAST-PART": 28,
+                  "MOOD-INF": 29,
+                  "TIME-PRES": 30,
+                  "TIME-PRET": 31,
+                  "TIME-IMP": 32,
+                  "TIME-CND": 33,
+                  "TIME-FUT": 34}
+index_to_param = {val: key for key, val in param_to_index.items()}
+
+def labels_to_vec(labels, max_len=128, max_labels=10):
+
+    vec = np.zeros((max_len, max_labels * 2), dtype=int)
+
+    for i, token_labels in enumerate(labels.split('\t')):
+        for j, sub_label in enumerate(BeautifulSoup(token_labels, features="html.parser").find_all(True)):
+            name = sub_label.name.upper()
+            param = sub_label.get("param", "").upper()
+            param = int(param) if param.isnumeric() else param
+
+            vec[i,j*2] = name_to_index[name]
+            if name == "MUTATE":
+                vec[i,j*2+1] = param_to_index[param]
+            elif name in ["ADD", "COPY-REPLACE", "COPY-ADD", "REPLACE"]:
+                vec[i,j*2+1] = param
+    return vec
+
+def vec_to_labels(vec, seq_len=128):
+    labels = []
+    for i in range(vec.shape[0]):
+        if i >= seq_len: # Override shape due to end of sequence, everything else is zeros
+            break
+        cur_labels = []
+        for j in range(0, vec.shape[1], 2):
+            name = index_to_name[vec[i,j]]
+            param = vec[i,j+1]
+            use_param = not name in ["KEEP", "DELETE"]
+
+            if name == "KEEP" and j > 0: # End of tokens
+                break
+
+            if name == "MUTATE":
+                param = index_to_param[param]
+            
+            if use_param:
+                cur_labels.append(f"<{name} param=\"{param}\"/>")
+            else:
+                cur_labels.append(f"<{name}/>")
+        labels.append(' '.join(cur_labels))
+    return '\t'.join(labels)
+
 def parallelize_function(arr, func, n_cores, kwargs={}):
-    # if n_cores == 1: # Handle non-parallelism
-    #     return [func(arr, **kwargs)]
-    
     with Pool(n_cores) as pool:
         res = pool.map(partial(func, **kwargs), arr)
     return res
@@ -140,7 +224,7 @@ def process_lemma(raw_lemma):
     '''
     To solve weird lemmatization problem where something like "empezábamos" has the lemma: "empezár"
     '''
-    if raw_lemma.endswith('r'):
+    if raw_lemma.endswith('r') and len(raw_lemma) > 1:
         return raw_lemma[:-2] + unidecode(raw_lemma[-2]) + raw_lemma[-1]
     else:
         return raw_lemma
@@ -499,7 +583,7 @@ def apply_labels(doc, labels, lemma_to_morph, vocab, nlp):
                 |- MOOD,
                     |- TIME
                         |- PERSON
-    :param lemmatizer (func(str)): a function that takes a word as input and returns the lemma
+    :param lemma_to_morph (dict): dictionary that maps lemmas to surface forms with morphological categories
     :param vocab ([str]): a list of all words in dictionary, aligned with model vocabulary
     :param nlp (spaCy model): the model for tokenization, lemmatization, and morphology of a word/sentence
 
@@ -508,6 +592,9 @@ def apply_labels(doc, labels, lemma_to_morph, vocab, nlp):
     sentence = [[token] for token in doc]
     sentence = sentence + [[nlp("EOS")[0]]] # Append [EOS]
     for i, label in enumerate(labels):
+        if i >= len(sentence):
+            print("WARNING: Too many labels.")
+            break
         for sub_label in BeautifulSoup(label, features="html.parser").find_all(True):
             name = sub_label.name.upper()
             param = sub_label.get("param", "").upper()
@@ -522,22 +609,6 @@ def apply_labels(doc, labels, lemma_to_morph, vocab, nlp):
                 sentence[i] = [doc[param]] + sentence[i]
             elif name == "COPY-REPLACE":
                 sentence[i] = [doc[param]]
-    
-    # Run copies
-    # for i, token_copies in enumerate(copies):
-    #     for copy in token_copies:
-    #         name = copy.name.upper()
-    #         param = int(copy.get("param", -1))
-    #         cur_token = [sentence[i]] if isinstance(sentence[i], spacy.Token) else sentence[i]
-    #         if name.split('-')[0] == "PRE":
-    #             sentence[i] = sentence[param] + cur_token
-    #         else:
-    #             sentence[i] = cur_token + sentence[param]
-
-    # Run deletes
-    # for i, delete in enumerate(deletes):
-    #     if delete:
-    #         sentence[i] = nlp("")
 
     corrected_sentence = ""
     first_token = True

@@ -2,7 +2,11 @@
 [![en](https://img.shields.io/badge/lang-en-red.svg)](README.md)
 [![es](https://img.shields.io/badge/lang-es-yellow.svg)](README-es.md)
 
-**version 0.6.1**
+The primary code of this repo is the code for synthetic error generation and token-transformation labelling. Therefore, all of that code is in this root directory. 
+
+**Code for replication of the trained models is in /models.**
+
+**version 0.6.2**
 
 SYNTHetic Grammatical Error Correction for Spanish (ES) is a system for generating synthetic GEC data for common Spanish grammatical errors to train a GEC model.
 
@@ -18,6 +22,8 @@ spacy == 3.7.6
 unidecode == 1.3
 transformers == 4.31.0
 torch==2.4.1
+numpy = 1.24.4
+nltk == 3.8.1
 ```
 
 ## Table of Contents
@@ -31,21 +37,21 @@ torch==2.4.1
 
 ## Scripts
 
-Note: If using the same file organization as the repo (i.e. if you cloned this repo), do not worry about the --dict_file, --vocab_file, --spacy_model, or --tokenizer_model args.
+Note: If using the same file organization as the repo (i.e. if you cloned this repo), do not worry about the --dict_file, --vocab_file, --error_files, --spacy_model, or --tokenizer_model args.
 
 ### generate.py
 
 The main script is generate.py. This script can be ran as:
 
 ```
-python generate.py INPUT_FILE OUTPUT_FILE ERROR_FILE_1 ERROR_FILE_2 ... ERROR_FILE_N [--min/-min_error] [minimum number of errors in a sentence] [-max/--max_error] [maximum number of errors in a sentence] [-d/--dict_file] [dictionary file] [--vocab_file] [vocab file] [--spacy_model] [spaCy model name] [--tokenizer_model] [tokenizer model path] [--seed] [seed] [-n/--num-sentences] [number of sentences to generate for each original] [--n_cores] [number of cores to use] [-t/--token] [--verify] [-v/--verbose] [-sw/--silence_warnings] [--strict]
+python generate.py INPUT_FILE OUTPUT_FILE [--error_files] [ERROR_FILE_1 ERROR_FILE_2 ... ERROR_FILE_N] [--min/-min_error] [minimum number of errors in a sentence] [-max/--max_error] [maximum number of errors in a sentence] [-d/--dict_file] [dictionary file] [--vocab_file] [vocab file] [--spacy_model] [spaCy model name] [--tokenizer_model] [tokenizer model path] [--seed] [seed] [-n/--num-sentences] [number of sentences to generate for each original] [--n_cores] [number of cores to use] [-t/--token] [--verify] [-v/--verbose] [-sw/--silence_warnings] [--strict]
 ```
 
 This script generates synthetic errorful sentences from well-formed Spanish sentences in a corpus.
 
 * input file is a path to a file with one sentence in Spanish on a line with a blank line in between each sentence. Note that this script assumes unlabeled data and that each line contains only one sentence.
 * output file is optional, defines the output path to place the generated data in. If no output path is supplied, it is placed in the same directory as the input file w/ the name [input file name]_synth.txt.
-* error files are json files with lists of errors to apply
+* --error_files are json files with lists of errors to apply
 * min_error is the minimum number of errors to be generated for a sentence
 * max_error is the maximum number of errors to be generated for a sentence
 * --dict_file is the path to the dictionary file which supplies different morphological forms for a word
@@ -125,7 +131,6 @@ The valid main token-level labels are:
 
 ## Mutation Types
 
-Note: Much more detail needed to be added for personal pronouns and the resolution dict needed to be manually created for the detail required. For example, resolution from *él* to *las* or *les* to *se* requires specification of the morphology of clitic pronouns and reflexivity.
 * CAPITALIZE
   * TRUE - capitalizes the word
   * FALSE - uncapitzalizes the word
@@ -135,6 +140,8 @@ Note: Much more detail needed to be added for personal pronouns and the resoluti
     * Default morphology = SING, MASC
   * PRONOUN changes the part-of-speech to pronoun
     * Default morphology = SING, MASC, NOM
+  * PERSONAL_PRONOUN changes the part-of-speech to personal pronoun
+    * Default morphology = SING, MASC, NOM, BASE, NO
   * VERB changes the part-of-speech to verb
     * Default morphology = SING, IND, PRES, 3
   * ARTICLE changes the part-of-speech to article
@@ -193,7 +200,7 @@ You may have noticed that these labels are not mutually exclusive. Some labels a
 
 ```
 espero que corre tú bien.
-<MUTATE type=CAPITALIZE-TRUE/>  <KEEP/>  <MUTATE type=PERSON-2/><MUTATE type=MOOD-SUBJ/><ADD token=tú/> <DELETE/>  <KEEP/>  <KEEP/>
+<MUTATE param="CAPITALIZE-TRUE"/>  <KEEP/>  <MUTATE param="PERSON-2"/><MUTATE param="MOOD-SUBJ"/><ADD token=vocab_index(tú)/> <DELETE/>  <KEEP/>  <KEEP/>
 ```
 
 changes the sentence to:

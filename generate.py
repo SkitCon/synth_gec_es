@@ -82,25 +82,32 @@ def load_errors(error_files):
             errors += [fill_empty_fields(error) for error in json.load(f)]
     return errors
 
-def token_list_to_str(sentence):
-    sentence_str = ""
+def token_list_to_str(token_list):
+    sentence = ""
     first_token = True
     no_space = False
-    for token in sentence:
-        if re.match("^[\.\,\(\)\{\}\?\¿\!\¡]$", token.text) or first_token or no_space:
-            sentence_str += token.text
-            first_token = False
-            no_space = False
-        else:
-            sentence_str += " " + token.text
-        
-        if re.match("^[\¿\¡]$", token.text): # Handle beginning punctuation
-            no_space = True
+    for token in token_list:
+        if not isinstance(token, list):
+            token = [token]
+        for cur_token in token:
+            if re.match("^[\.\,\?\!\)\}\]\-\:\;]$", str(cur_token)) or first_token or no_space:
+                sentence += str(cur_token)
+                first_token = False
+                no_space = False
+            elif re.match("^\#\#.*$", str(cur_token)): # Sub-word
+                sentence += str(cur_token)[2:]
+                first_token = False
+                no_space = False
+            else:
+                sentence += " " + str(cur_token)
+            
+            if re.match("^[\¿\¡\(\{\[\"]$", str(cur_token)): # Handle beginning punctuation
+                no_space = True
     
-    if sentence_str.endswith("EOS"): # Remove end token
-        sentence_str = sentence_str[:-4]
-
-    return sentence_str
+    if sentence.endswith("E"): # Remove end token
+        sentence = sentence[:-2]
+    
+    return sentence
 
 def can_apply(error, sentence):
     num_valid = 0
@@ -111,7 +118,7 @@ def can_apply(error, sentence):
                 return True
     return False
 
-def apply_error(error, sentence, lemma_to_morph, vocab, nlp, verbose=False):
+def apply_error(error, sentence, lemma_to_morph, vocab, nlp, verbose=False, silence_warnings=False):
     new_sentence = []
 
     if verbose:
@@ -122,7 +129,12 @@ def apply_error(error, sentence, lemma_to_morph, vocab, nlp, verbose=False):
         for i, token in enumerate(sentence):
             if re.fullmatch(error["criteria"], token.lemma_) and (UPOS_TO_SIMPLE[token.pos_] in error["criteria_pos"] or not error["criteria_pos"]):
                 choices.append(i)
-        mixup_i = random.choice(choices)
+        if len(choices) != 0:
+            mixup_i = random.choice(choices)
+        else:
+            if not silence_warnings:
+                print(f"No valid choices for mixup error: {error['name']}")
+            mixup_i = -1
         new_sentence = []
         if verbose:
             print(f"Possible choices: {choices}")
@@ -131,15 +143,29 @@ def apply_error(error, sentence, lemma_to_morph, vocab, nlp, verbose=False):
             if i == mixup_i:
                 possible_lemmas = error["output"].copy()
                 possible_lemmas.remove(token.lemma_)
-                new_lemma = random.choice(possible_lemmas)
+                if len(choices) != 0:
+                    new_lemma = random.choice(possible_lemmas)
+                else:
+                    if not silence_warnings:
+                        print(f"No possible lemmas to replace with for {token.lemma_} for mixup error: {error['name']}")
+                    new_lemma = token.lemma_
                 if error["match_morph"]:
                     cur_path = get_path(token)
-                    new_token = follow_path(lemma_to_morph[new_lemma], cur_path)
+                    try:
+                        new_token = follow_path(lemma_to_morph[new_lemma], cur_path)
+                    except KeyError as e:
+                        print(f"KeyError {e} while trying to match morphology. Trying default path.")
+                        try:
+                            new_token = follow_path(lemma_to_morph[new_lemma], DEFAULT_PATH_FOR_POS[UPOS_TO_SIMPLE[token.pos_]])
+                        except KeyError as e:
+                            print(f"KeyError {e} while trying to match DEFAULT morphology. Using lemma.")
+                            new_token = token.lemma_
                 else:
                     try:
                         new_token = follow_path(lemma_to_morph[new_lemma], DEFAULT_PATH_FOR_POS[UPOS_TO_SIMPLE[token.pos_]])
                     except KeyError:
-                        print(f"KeyError trying to get surface form of {new_lemma}, using lemma...")
+                        if not silence_warnings and verbose:
+                            print(f"KeyError trying to get surface form of {new_lemma}, using lemma...")
                         new_token = new_lemma
                 new_sentence.append(new_token[0].upper() + new_token[1:] if token.text[0].isupper() else new_token)
             else:
@@ -150,25 +176,34 @@ def apply_error(error, sentence, lemma_to_morph, vocab, nlp, verbose=False):
             if re.fullmatch(error["criteria"], token.lemma_) and (UPOS_TO_SIMPLE[token.pos_] in error["criteria_pos"] or not error["criteria_pos"]):
                 choices.append(i)
         new_sentence = sentence.copy()
-        swap_i = random.choice(choices)
-        if verbose:
-            print(f"Possible choices for i: {choices}")
-        choices.remove(swap_i)
-        if len(choices) == 0:
-            print("Unable to swap, only 1 word in sentence meets criteria. No change to sentence.")
+        if len(choices) != 0:
+            if verbose:
+                print(f"Possible choices for i: {choices}")
+            swap_i = random.choice(choices)
+            choices.remove(swap_i)
+            if len(choices) == 0:
+                print("Unable to swap, only 1 word in sentence meets criteria. No change to sentence.")
+            else:
+                if verbose:
+                    print(f"Possible choices for j: {choices}")
+                swap_j = random.choice(choices)
+                if verbose:
+                    print(f"Applying error to: {swap_i} and {swap_j}")
+                new_sentence[swap_i], new_sentence[swap_j] = new_sentence[swap_j], new_sentence[swap_i]
         else:
-            if verbose:
-                print(f"Possible choices for j: {choices}")
-            swap_j = random.choice(choices)
-            if verbose:
-                print(f"Applying error to: {swap_i} and {swap_j}")
-            new_sentence[swap_i], new_sentence[swap_j] = new_sentence[swap_j], new_sentence[swap_i]
+            if not silence_warnings:
+                print(f"No valid choices for swap error: {error['name']}")
     elif error["type"] == "morph":
         choices = []
         for i, token in enumerate(sentence):
             if re.fullmatch(error["criteria"], token.lemma_) and (UPOS_TO_SIMPLE[token.pos_] in error["criteria_pos"] or not error["criteria_pos"]):
                 choices.append(i)
-        morph_i = random.choice(choices)
+        if len(choices) != 0:
+            morph_i = random.choice(choices)
+        else:
+            if not silence_warnings:
+                print(f"No valid choices for morph error: {error['name']}")
+            morph_i = -1
         if verbose:
             print(f"Possible choices: {choices}")
             print(f"Applying error to: {morph_i}")
@@ -193,13 +228,21 @@ def apply_error(error, sentence, lemma_to_morph, vocab, nlp, verbose=False):
                     cur_category = cur_path[index_of_change]
 
                     possible_categories = AVAILABLE_TYPES[category_to_mutate].copy()
-                    possible_categories.remove(cur_category)
-                    label_param += "-" + random.choice(possible_categories)
-                    try:
-                        new_token = mutate(token, label_param, lemma_to_morph, nlp)
-                    except KeyError:
-                        print(f"Tried to mutate {token}, but was not in morphology dict. No change to sentence.")
+                    if not cur_category in possible_categories:
                         new_token = str(token)
+                    else:
+                        possible_categories.remove(cur_category)
+                        label_param += "-" + random.choice(possible_categories)
+                        try:
+                            new_token = mutate(token, label_param, lemma_to_morph, nlp)
+                        except KeyError:
+                            if not silence_warnings and verbose:
+                                print(f"Tried to mutate {token}, but was not in morphology dict. No change to sentence.")
+                            new_token = str(token)
+                    if type(new_token) == float:
+                        if not silence_warnings:
+                            print(f"{new_token} was not a string. Converting to string.")
+                        new_token = str(new_token)
                     new_sentence.append(new_token[0].upper() + new_token[1:] if new_token[0].isupper() else new_token)
             else:
                 new_sentence.append(token)
@@ -208,7 +251,12 @@ def apply_error(error, sentence, lemma_to_morph, vocab, nlp, verbose=False):
         for i, token in enumerate(sentence):
             if re.fullmatch(error["criteria"], token.lemma_) and (UPOS_TO_SIMPLE[token.pos_] in error["criteria_pos"] or not error["criteria_pos"]):
                 choices.append(i)
-        add_i = random.choice(choices)
+        if len(choices) != 0:
+            add_i = random.choice(choices)
+        else:
+            if not silence_warnings:
+                print(f"No valid choices for add error: {error['name']}")
+            add_i = -1
         if verbose:
             print(f"Possible choices for where to add: {choices}")
             print(f"Applying error to: {add_i}")
@@ -239,7 +287,12 @@ def apply_error(error, sentence, lemma_to_morph, vocab, nlp, verbose=False):
         for i, token in enumerate(sentence):
             if re.fullmatch(error["criteria"], token.lemma_) and (UPOS_TO_SIMPLE[token.pos_] in error["criteria_pos"] or not error["criteria_pos"]):
                 choices.append(i)
-        delete_i = random.choice(choices)
+        if len(choices) != 0:
+            delete_i = random.choice(choices)
+        else:
+            if not silence_warnings:
+                print(f"No valid choices for delete error: {error['name']}")
+            delete_i = -1
         if verbose:
             print(f"Possible choices for where to delete: {choices}")
             print(f"Applying error to: {delete_i}")
@@ -249,7 +302,12 @@ def apply_error(error, sentence, lemma_to_morph, vocab, nlp, verbose=False):
         for i, token in enumerate(sentence):
             if re.fullmatch(error["criteria"], token.lemma_) and (UPOS_TO_SIMPLE[token.pos_] in error["criteria_pos"] or not error["criteria_pos"]):
                 choices.append(i)
-        replace_i = random.choice(choices)
+        if len(choices) != 0:
+            replace_i = random.choice(choices)
+        else:
+            if not silence_warnings:
+                print(f"No valid choices for replace error: {error['name']}")
+            replace_i = -1
         if verbose:
             print(f"Possible choices for where to replace: {choices}")
             print(f"Applying error to: {replace_i}")
@@ -268,8 +326,8 @@ def apply_error(error, sentence, lemma_to_morph, vocab, nlp, verbose=False):
         new_sentence = sentence
     
     if verbose:
-        print(f"New sentence: {' '.join([str(token) for token in new_sentence])}")
-    return nlp(' '.join([str(token) for token in new_sentence])) # Re-apply nlp with change
+        print(f"New sentence: {token_list_to_str(new_sentence)}")
+    return nlp(token_list_to_str(new_sentence)) # Re-apply nlp with change
 
 def label_sentence_error_wrapper(sentence_pair, lemma_to_morph, vocab_index, verbose=False, silence_warnings=False, strict=False):
     global nlp
@@ -312,7 +370,7 @@ def apply_labels_error_wrapper(sentence_label, lemma_to_morph, vocab, verbose=Fa
         return ""
     return decoded_sentence
 
-def generate_errorful_sentences(correct_sentence, errors, lemma_to_morph, vocab_only_words, min_error=0, max_error=3, num_sentences=1, verbose=False):
+def generate_errorful_sentences(correct_sentence, errors, lemma_to_morph, vocab_only_words, min_error=0, max_error=3, num_sentences=1, verbose=False, silence_warnings=False):
     global nlp
 
     if re.sub(r"\s", '', correct_sentence) == "": # Empty line
@@ -333,8 +391,11 @@ def generate_errorful_sentences(correct_sentence, errors, lemma_to_morph, vocab_
             for i, error in enumerate(errors):
                 if can_apply(error, cur_sentence):
                     choices += [i] * error["weight"]
-            new_sentence = apply_error(errors[random.choice(choices)], cur_sentence, lemma_to_morph, vocab_only_words, nlp, verbose=verbose)
-            cur_sentence = [token for token in new_sentence] # Update sentence
+            if len(choices) != 0:
+                new_sentence = apply_error(errors[random.choice(choices)], cur_sentence, lemma_to_morph, vocab_only_words, nlp, verbose=verbose, silence_warnings=silence_warnings)
+                cur_sentence = [token for token in new_sentence] # Update sentence
+            else:
+                print("No valid errors for sentence (empty sentence?). No errors generated.")
         sentence_pairs.append((token_list_to_str(cur_sentence), token_list_to_str(correct_sentence)))
     return sentence_pairs
     
@@ -354,7 +415,7 @@ def main(input_file, output_file, errors,
     sentence_pairs = []
     with open(input_file, 'r') as f:
         lines = f.readlines()
-        sentences = [lines[i] for i in range(0, len(lines), 2)]
+        sentences = [lines[i] for i in range(0, len(lines), 2) if lines[i].strip() != ""]
         for i in range(0, len(sentences), n_cores):
 
             slice = sentences[i:min(i+n_cores, len(sentences))]
@@ -363,7 +424,7 @@ def main(input_file, output_file, errors,
             start_time = time.time()
             sentence_pair_groups = parallelize_function(slice, generate_errorful_sentences, n_cores,
                                                         kwargs={"errors":errors, "lemma_to_morph":lemma_to_morph, "vocab_only_words":vocab_only_words,
-                                                                "min_error":min_error, "max_error":max_error, "num_sentences":num_sentences, "verbose":verbose})
+                                                                "min_error":min_error, "max_error":max_error, "num_sentences":num_sentences, "verbose":verbose, "silence_warnings":silence_warnings})
             cur_sentence_pairs = [sentence_pair for group in sentence_pair_groups for sentence_pair in group]
             sentence_pairs += cur_sentence_pairs
             cur_time = time.time()
@@ -398,8 +459,8 @@ def main(input_file, output_file, errors,
                         if labels[j] != "" and decoded_sentences[j] != "": # No need to warn if this sentence already failed labeling or errored during apply_labels
                             if not silence_warnings:
                                 print(f"VERIFY FAILED!\nReport:\n\tErrorful Sentence:{slice[j][0]}\n\tGenerated Labels:{labels[j]}\n\tTarget:{slice[j][1]}\n\tResult from Decode:{decoded_sentences[j]}")
-                            failed_verification += 1
-                            excluded_sentences += 1
+                        failed_verification += 1
+                        excluded_sentences += 1
                         continue
                     else:
                         f.write(f"{slice[j][0]}\n{labels[j]}\n{slice[j][1]}\n\n")
@@ -423,7 +484,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("input_file", help="path to a file with sentences in Spanish on each line")
     parser.add_argument("output_file", help="output path")
-    parser.add_argument("error_files", nargs="+", help="error file paths")
+    parser.add_argument("--error_files", nargs="+",
+                        default= ["lang_def/errors/mixup_errors.json", "lang_def/errors/swap_errors.json",
+                                  "lang_def/errors/morph_errors.json", "lang_def/errors/add_errors.json",
+                                  "lang_def/errors/delete_errors.json", "lang_def/errors/replace_errors.json"],
+                        help="error file paths")
     parser.add_argument("-min", "--min_error", default=0, type=int, help="The minimum number of errors that can be generated in a sentence. By default 0")
     parser.add_argument("-max", "--max_error", default=3, type=int, help="The maximum number of errors that can be generated in a sentence. By default 3")
 
