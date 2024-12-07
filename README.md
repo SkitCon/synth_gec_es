@@ -4,14 +4,14 @@
 
 **Code for replication of fine-tuned models is in [./models](models/README.md).**
 
-**version 0.6.2**
+**version 0.7.5**
 
 SYNTHetic Grammatical Error Correction for Spanish (ES) is a system for generating synthetic GEC data for common Spanish grammatical errors to train a GEC model.
 
 To be used to augment smaller high-quality training sets as in *GECToR – Grammatical Error Correction: Tag, Not Rewrite* (2020)
 
 **WORK IN PROGRESS**
-All scripts are working, but may still contain minor bugs. In general, if a script fails, an error message will print and it will continue with the rest of the file, ignoring that sentence.
+All scripts are working, but may still contain minor bugs with edge cases. In general, if a script fails, an error message will print and it will continue with the rest of the file, ignoring that sentence. The main limitation to keep in mind is that the decoding algorithm is too slow in my opinion. I recommend running it with greater than 4 cores (I used 94) for reasonable runtime. This is due to a reliance on the largest spaCy model (es_dep_news_trf) as a core part of the logic. There is also some redundancy where the spaCy model needs to be re-ran on a portion of the sentence after changes to a word even if it is not necessary. Therefore, the first thing that will be changed is a major rewrite of the decoding algorithm which 1) adds logic for chaining consecutive mutates, 2) removes usage of NLP if it will never be used (i.e. no mutate appears), and 3) adjusts code to be able to use a smaller rule-based morphology and POS-tagger model (es_dep_new_sm?) if it does not significantly affect performance. For the future, this code will likely be rewritten to be a wrapper around C++/Rust code which does the actual decoding logic.
 
 Required libraries for all scripts:
 ```
@@ -22,6 +22,10 @@ transformers == 4.31.0
 torch==2.4.1
 numpy = 1.24.4
 nltk == 3.8.1
+scikit-learn==0.24.2
+
+# Run to download spaCy model
+python -m spacy download es_dep_news_trf
 ```
 
 ## Table of Contents
@@ -33,6 +37,7 @@ nltk == 3.8.1
 * [Definitions](#definitions)
 * [Mutation Types](#mutation-types)
 * [Token-Level Stacking](#token-level-stacking)
+* [Generating Morphological Dictionary](#generating-morphological-dictionary)
 
 ## Overview
 
@@ -230,10 +235,23 @@ For convenience, the numerical representations of each of property in these labe
 * MOOD-SUB = 26
 * TIME-PRET = 31
 
-With max_labels_per_token = 5, the vector representation of these labels is:
+With max_labels = 5, the vector representation of these labels is:
 
 `[5, 24, 5, 26, 5, 31, 0, 0, 0, 0]`
 
 and this results in the transformed token: `estuviera`
 
 Note this is still a WIP, so I'm happy to take feedback for adjustments of this formatting.
+
+## Generating Morphological Dictionary
+
+The morphological dictionary is generated using pre-processed JSON from Spanish Wikitionary, the Jehle verb database, and a set of manual entries. It can be ran like so:
+
+```
+python3 generate_morpho_dict.py [path to Wikitionary JSONL file] [path to Jehle verb database] --manual_entries manual_entries.json
+```
+
+The Wikitionary JSONL file and Jehle verb database are too large to host on this Github, but if you need to generate the morphological dictionary yourself, you can download them here:
+
+* [Wikitionary JSON](https://kaikki.org/dictionary/rawdata.html) (file: Spanish es-extract.jsonl (915.9MB))
+* [Jehle verb databse](https://github.com/ghidinelli/fred-jehle-spanish-verbs/blob/master/jehle_verb_database.csv)

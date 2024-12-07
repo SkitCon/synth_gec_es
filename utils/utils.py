@@ -102,7 +102,8 @@ name_to_index = {"KEEP": 0,
                  "REPLACE": 6}
 index_to_name = {val: key for key, val in name_to_index.items()}
 
-param_to_index = {"CAPITALIZE": 1,
+param_to_index = {"CAPITALIZE-TRUE": 0,
+                  "CAPITALIZE-FALSE": 1,
                   "POS-NOUN": 2,
                   "POS-PRONOUN": 3,
                   "POS-PERSONAL_PRONOUN": 4,
@@ -138,7 +139,7 @@ param_to_index = {"CAPITALIZE": 1,
                   "TIME-FUT": 34}
 index_to_param = {val: key for key, val in param_to_index.items()}
 
-def labels_to_vec(labels, max_len=128, max_labels=10):
+def labels_to_vec(labels, max_len=128, max_labels=12):
 
     vec = np.zeros((max_len, max_labels * 2), dtype=int)
 
@@ -162,15 +163,20 @@ def vec_to_labels(vec, seq_len=128):
             break
         cur_labels = []
         for j in range(0, vec.shape[1], 2):
-            name = index_to_name[vec[i,j]]
-            param = vec[i,j+1]
+            name = index_to_name[int(vec[i,j])]
+            param = int(vec[i,j+1])
             use_param = not name in ["KEEP", "DELETE"]
 
             if name == "KEEP" and j > 0: # End of tokens
                 break
 
             if name == "MUTATE":
-                param = index_to_param[param]
+                try:
+                    param = index_to_param[param]
+                except KeyError:
+                    print(f"Invalid param {param} for mutate. Using <KEEP/>")
+                    name = "KEEP"
+                    use_param = False
             
             if use_param:
                 cur_labels.append(f"<{name} param=\"{param}\"/>")
@@ -599,16 +605,19 @@ def apply_labels(doc, labels, lemma_to_morph, vocab, nlp):
             name = sub_label.name.upper()
             param = sub_label.get("param", "").upper()
             param = int(param) if param.isnumeric() else param
-            if len(name.split('-')) < 2 or name.split('-')[0] != "COPY":
-                sentence[i] = apply_label(sentence[i], name, param, lemma_to_morph, vocab, nlp)
-                
-                # Restore spacy for added words, add context because spacy gets confused with singular words
-                sentence[i] = restore_nlp(sentence, sentence[i], i, nlp)
+            try:
+                if len(name.split('-')) < 2 or name.split('-')[0] != "COPY":
+                    sentence[i] = apply_label(sentence[i], name, param, lemma_to_morph, vocab, nlp)
+                    
+                    # Restore spacy for added words, add context because spacy gets confused with singular words
+                    sentence[i] = restore_nlp(sentence, sentence[i], i, nlp)
 
-            elif name == "COPY-ADD":
-                sentence[i] = [doc[param]] + sentence[i]
-            elif name == "COPY-REPLACE":
-                sentence[i] = [doc[param]]
+                elif name == "COPY-ADD":
+                    sentence[i] = [doc[param]] + sentence[i]
+                elif name == "COPY-REPLACE":
+                    sentence[i] = [doc[param]]
+            except IndexError:
+                print("IndexError, no change to token.")
 
     corrected_sentence = ""
     first_token = True
