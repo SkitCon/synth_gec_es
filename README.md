@@ -11,7 +11,7 @@ SYNTHetic Grammatical Error Correction for Spanish (ES) is a system for generati
 To be used to augment smaller high-quality training sets as in *GECToR – Grammatical Error Correction: Tag, Not Rewrite* (2020)
 
 **WORK IN PROGRESS**
-All scripts are working, but may still contain minor bugs with edge cases. In general, if a script fails, an error message will print and it will continue with the rest of the file, ignoring that sentence. The main limitation to keep in mind is that the decoding algorithm is too slow in my opinion. I recommend running it with greater than 4 cores (I used 94) for reasonable runtime. This is due to a reliance on the largest spaCy model (es_dep_news_trf) as a core part of the logic. There is also some redundancy where the spaCy model needs to be re-ran on a portion of the sentence after changes to a word even if it is not necessary. Therefore, the first thing that will be changed is a major rewrite of the decoding algorithm which 1) adds logic for chaining consecutive mutates, 2) removes usage of NLP if it will never be used (i.e. no mutate appears), and 3) adjusts code to be able to use a smaller rule-based morphology and POS-tagger model (es_dep_new_sm?) if it does not significantly affect performance. For the future, this code will likely be rewritten to be a wrapper around C++/Rust code which does the actual decoding logic.
+All scripts and models are working, but may still contain minor bugs with edge cases. In general, if a script fails, an error message will print and it will continue with the rest of the file, ignoring that sentence.
 
 Required libraries for all scripts:
 ```
@@ -38,6 +38,7 @@ python -m spacy download es_dep_news_trf
 * [Mutation Types](#mutation-types)
 * [Token-Level Stacking](#token-level-stacking)
 * [Generating Morphological Dictionary](#generating-morphological-dictionary)
+* [Limitations](#limitations)
 
 ## Overview
 
@@ -255,3 +256,7 @@ The Wikitionary JSONL file and Jehle verb database are too large to host on this
 
 * [Wikitionary JSON](https://kaikki.org/dictionary/rawdata.html) (file: Spanish es-extract.jsonl (915.9MB))
 * [Jehle verb databse](https://github.com/ghidinelli/fred-jehle-spanish-verbs/blob/master/jehle_verb_database.csv)
+
+## Limitations
+
+The main limitation to keep in mind is that the decoding algorithm is too slow in my opinion. I recommend running it with greater than 4 cores (I used 94) for reasonable runtime. This is due to a reliance on the largest spaCy model (es_dep_news_trf) as a core part of the logic. There is also some redundancy where the spaCy model needs to be re-ran on a portion of the sentence after changes to a word even if it is not necessary. Therefore, the first thing that will be changed is a major rewrite of the decoding algorithm which 1) adds logic for chaining consecutive mutates, 2) removes usage of NLP if it will never be used (i.e. no mutate appears), and 3) adjusts code to be able to use a smaller rule-based morphology and POS-tagger model (es_dep_new_sm?) if it does not significantly affect performance. For the future, this code will likely be rewritten to be a wrapper around C++/Rust code which does the actual decoding logic.
