@@ -194,9 +194,9 @@ Las transformaciones de token principales son:
 * MOOD (MODO)
   * IND (INDICATIVO) - convertir la palabra al indicativo
   * SUB (SUBJUNTIVO) - convertir la palabra al subjuntivo
-  * **DEPRECATED**[^1] PROG (PROGRESIVO) - convertir la palabra al progresivo (con la conjugación correcta de *estar* antes del verbo)
-  * **DEPRECATED**[^1] PERF (PERFECTO) - convertir la palabra al perfecto (con la conjugación correcta de *haber* antes del verbo)
-  * **DEPRECATED**[^1] PERF-SUBJ (PERFECTO SUBJUNCTIVO) - convertir la palabra al perfecto subjuntivo (con la conjugación correcta de *haber* antes del verbo)
+  * **DEPRECADO**[^1] PROG (PROGRESIVO) - convertir la palabra al progresivo (con la conjugación correcta de *estar* antes del verbo)
+  * **DEPRECADO**[^1] PERF (PERFECTO) - convertir la palabra al perfecto (con la conjugación correcta de *haber* antes del verbo)
+  * **DEPRECADO**[^1] PERF-SUBJ (PERFECTO SUBJUNCTIVO) - convertir la palabra al perfecto subjuntivo (con la conjugación correcta de *haber* antes del verbo)
   * GER (PARTICIPIO PRESENTE) - convertir la palabra al participio presente, distinto del progresivo que también añade la conjugación correcta *estar*
   * PAST-PART (PARTICIPIO PASADO) - convertir la palabra al participio pasado
   * INF (INFINITIVO) - convertir la palabra al infinitivo (i.e. sin modo)
